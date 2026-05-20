@@ -167,137 +167,82 @@
         Enter a target username, email, domain, or phone above, select categories, and click <strong>Scan</strong> to resolve digital profiles in real-time.
       </p>
     </div>
-  {:else if scanner.isScanning}
-    <!-- Render FULL scan grid with live statuses -->
-    <div class="card-grid-container" style="animation: fade-in-up 0.4s ease;">
-      {#each filteredPlatforms as platform}
-        {@const result = scanner.results[platform.name]}
-        {@const status = result ? result.status : (scannedCount < filteredPlatforms.length ? 'PENDING' : 'NOT_FOUND')}
-        
-        <div class="platform-status-card {status.toLowerCase()}" style="animation: fade-in-up 0.25s ease;">
-          <div class="card-top-row">
-            <h4 class="card-title" style="font-size: 15px;">{platform.name}</h4>
-            <span class="status-badge {status.toLowerCase()}">{status.replace('_', ' ')}</span>
-          </div>
-
-          <div style="display: flex; flex-direction: column; gap: 4px;">
-            <span class="card-category-tag" style="font-size: 11px;">
-              {platform.category} • {platform.identifierType || 'USERNAME'}
-            </span>
-
-            <!-- Dynamic Schema Attribute Badges -->
-            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px;">
-              {#if platform.requiresProxy}
-                <span class="status-badge" style="background: rgba(0, 102, 255, 0.08); color: var(--accent-blue); font-size: 9px; padding: 2px 5px;">🌐 Proxy</span>
-              {/if}
-              {#if platform.riskLevel === 'HIGH'}
-                <span class="status-badge" style="background: rgba(239, 68, 68, 0.08); color: var(--accent-red); font-size: 9px; padding: 2px 5px;">⚠️ High Risk</span>
-              {/if}
-              {#if platform.envCookieKey}
-                {#if scanner.sessionStatus[platform.envCookieKey]}
-                  <span class="status-badge" style="background: rgba(16, 185, 129, 0.08); color: var(--accent-green); font-size: 9px; padding: 2px 5px;">🔑 Active Session</span>
-                {:else}
-                  <span class="status-badge" style="background: rgba(245, 158, 11, 0.08); color: var(--accent-orange); font-size: 9px; padding: 2px 5px;">⚠️ Unauthenticated</span>
-                {/if}
-              {/if}
+  {:else}
+    <!-- Render ONLY the found cards in real-time or when completed -->
+    {@const foundScanned = filteredPlatforms.filter(p => scanner.results[p.name]?.status === 'FOUND')}
+    
+    {#if foundScanned.length === 0}
+      {#if scanner.isScanning}
+        <!-- Show beautiful real-time scan spinner while scanning with 0 found matches so far -->
+        <div style="padding: 60px 24px; text-align: center; color: var(--text-secondary); background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 16px; box-shadow: var(--shadow-sm); width: 100%;">
+          <div class="pulse-loader" style="width: 32px; height: 32px; border: 3.5px solid var(--border-color); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+          <h4 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--text-primary);">Footprint Lookup Active</h4>
+          <p style="margin: 0; font-size: 13px; max-width: 400px; line-height: 1.5;">
+            Scanning platform directories in real-time. Matches will appear here immediately as they are discovered.
+          </p>
+        </div>
+      {:else}
+        <!-- No matches found after scan completed -->
+        <div style="padding: 60px 24px; text-align: center; color: var(--text-secondary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 16px; box-shadow: var(--shadow-sm); width: 100%;">
+          <span style="font-size: 40px;">∅</span>
+          <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">No Matches Identified</h4>
+          <p style="margin: 0; font-size: 14px; max-width: 440px; line-height: 1.5;">
+            The investigation was completed, but no public digital footprints matching this target were detected on the searched networks.
+          </p>
+        </div>
+      {/if}
+    {:else}
+      <!-- Render the discovered matches -->
+      <div class="card-grid-container" style="animation: fade-in-up 0.4s ease;">
+        {#each foundScanned as platform}
+          {@const result = scanner.results[platform.name]}
+          <div class="platform-status-card found" style="animation: fade-in-up 0.3s ease; opacity: 1;">
+            <div class="card-top-row">
+              <h4 class="card-title" style="font-size: 16px;">{platform.name}</h4>
+              <span class="status-badge found">Active Match</span>
             </div>
-          </div>
+            
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <span class="card-category-tag" style="font-size: 11px;">
+                {platform.category} • {platform.identifierType || 'USERNAME'}
+              </span>
 
-          {#if result?.status === 'FOUND'}
-            {#if result.data?.avatar}
-              <div style="display: flex; gap: 10px; align-items: center; margin-top: 4px;">
-                <img src={result.data.avatar} style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--border-color); object-fit: cover;" alt="{platform.name} avatar" />
+              <!-- Dynamic Schema Attribute Badges -->
+              <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                {#if platform.requiresProxy}
+                  <span class="status-badge" style="background: rgba(16, 185, 129, 0.08); color: var(--accent-green); font-size: 9px; padding: 2px 5px;">🌐 Proxy</span>
+                {/if}
+                {#if platform.riskLevel === 'HIGH'}
+                  <span class="status-badge" style="background: rgba(239, 68, 68, 0.08); color: var(--accent-red); font-size: 9px; padding: 2px 5px;">⚠️ High Risk</span>
+                {/if}
+              </div>
+            </div>
+            
+            {#if result?.data?.avatar}
+              <div style="display: flex; gap: 12px; align-items: center; margin-top: 4px;">
+                <img src={result.data.avatar} style="width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--border-color); object-fit: cover;" alt="{platform.name} avatar" />
                 <p class="card-bio" style="margin: 0; -webkit-line-clamp: 1;">{result.data.bio || 'Profile verified'}</p>
               </div>
-            {:else if result.data?.bio}
+            {:else if result?.data?.bio}
               <p class="card-bio">{result.data.bio}</p>
             {:else}
               <p class="card-bio" style="font-style: italic; opacity: 0.7;">Footprint verified. Profile active.</p>
             {/if}
 
+            <!-- Clickable External Redirect Link -->
             <a
-              href={result.data?.url}
+              href={result?.data?.url}
               target="_blank"
               rel="noreferrer"
               class="dossier-export-btn"
-              style="font-size: 11px; padding: 6px 10px; border-radius: 5px; margin-top: auto; text-decoration: none; display: flex; align-items: center; justify-content: center; background: var(--text-primary); color: var(--bg-card);"
+              style="font-size: 12px; padding: 8px 12px; border-radius: 6px; margin-top: auto; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--text-primary); color: var(--bg-card); transition: all 0.2s ease;"
             >
               Visit Profile ↗
             </a>
-          {:else}
-            <p class="card-bio" style="font-style: italic; opacity: 0.5;">
-              {#if status === 'SCANNING'}
-                Querying database index...
-              {:else if status === 'PENDING'}
-                Awaiting batch scheduler...
-              {:else}
-                No profile matches.
-              {/if}
-            </p>
-          {/if}
-        </div>
-      {/each}
-    </div>
-  {:else if foundCount === 0}
-    <!-- No matches found after scan completed -->
-    <div style="padding: 60px 24px; text-align: center; color: var(--text-secondary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 16px; box-shadow: var(--shadow-sm);">
-      <span style="font-size: 40px;">∅</span>
-      <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">No Matches Identified</h4>
-      <p style="margin: 0; font-size: 14px; max-width: 440px; line-height: 1.5;">
-        The investigation was completed, but no public digital footprints matching this target were detected on the searched networks.
-      </p>
-    </div>
-  {:else}
-    <!-- Render ONLY the found cards when scan finishes for clean presentation -->
-    <div class="card-grid-container" style="animation: fade-in-up 0.4s ease;">
-      {#each filteredPlatforms.filter(p => scanner.results[p.name]?.status === 'FOUND') as platform}
-        {@const result = scanner.results[platform.name]}
-        <div class="platform-status-card found" style="animation: fade-in-up 0.3s ease; opacity: 1;">
-          <div class="card-top-row">
-            <h4 class="card-title" style="font-size: 16px;">{platform.name}</h4>
-            <span class="status-badge found">Active Match</span>
           </div>
-          
-          <div style="display: flex; flex-direction: column; gap: 4px;">
-            <span class="card-category-tag" style="font-size: 11px;">
-              {platform.category} • {platform.identifierType || 'USERNAME'}
-            </span>
-
-            <!-- Dynamic Schema Attribute Badges -->
-            <div style="display: flex; flex-wrap: wrap; gap: 4px;">
-              {#if platform.requiresProxy}
-                <span class="status-badge" style="background: rgba(16, 185, 129, 0.08); color: var(--accent-green); font-size: 9px; padding: 2px 5px;">🌐 Proxy</span>
-              {/if}
-              {#if platform.riskLevel === 'HIGH'}
-                <span class="status-badge" style="background: rgba(239, 68, 68, 0.08); color: var(--accent-red); font-size: 9px; padding: 2px 5px;">⚠️ High Risk</span>
-              {/if}
-            </div>
-          </div>
-          
-          {#if result?.data?.avatar}
-            <div style="display: flex; gap: 12px; align-items: center; margin-top: 4px;">
-              <img src={result.data.avatar} style="width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--border-color); object-fit: cover;" alt="{platform.name} avatar" />
-              <p class="card-bio" style="margin: 0; -webkit-line-clamp: 1;">{result.data.bio || 'Profile verified'}</p>
-            </div>
-          {:else if result?.data?.bio}
-            <p class="card-bio">{result.data.bio}</p>
-          {:else}
-            <p class="card-bio" style="font-style: italic; opacity: 0.7;">Footprint verified. Profile active.</p>
-          {/if}
-
-          <!-- Clickable External Redirect Link -->
-          <a
-            href={result?.data?.url}
-            target="_blank"
-            rel="noreferrer"
-            class="dossier-export-btn"
-            style="font-size: 12px; padding: 8px 12px; border-radius: 6px; margin-top: auto; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--text-primary); color: var(--bg-card); transition: all 0.2s ease;"
-          >
-            Visit Profile ↗
-          </a>
-        </div>
-      {/each}
-    </div>
+        {/each}
+      </div>
+    {/if}
   {/if}
 </div>
 
@@ -311,5 +256,10 @@
       opacity: 1;
       transform: translateY(0);
     }
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 </style>

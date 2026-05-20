@@ -5,64 +5,24 @@
 
   let { scanner }: { scanner: ScannerState } = $props();
 
-  // Curated list of 45 platforms to render reactive cards
-  const platforms = [
-    { name: 'GitHub', category: 'Tech' },
-    { name: 'GitLab', category: 'Tech' },
-    { name: 'NPM', category: 'Tech' },
-    { name: 'DockerHub', category: 'Tech' },
-    { name: 'LeetCode', category: 'Tech' },
-    { name: 'CodePen', category: 'Tech' },
-    { name: 'HackerNews', category: 'Tech' },
-    { name: 'Replit', category: 'Tech' },
-    { name: 'Kaggle', category: 'Tech' },
-    { name: 'Dev.to', category: 'Tech' },
-
-    { name: 'Reddit', category: 'Social' },
-    { name: 'Medium', category: 'Social' },
-    { name: 'Linktree', category: 'Social' },
-    { name: 'BuyMeACoffee', category: 'Social' },
-    { name: 'Patreon', category: 'Social' },
-    { name: 'Substack', category: 'Social' },
-    { name: 'Pinterest', category: 'Social' },
-    { name: 'Tumblr', category: 'Social' },
-    { name: 'Flickr', category: 'Social' },
-    { name: 'About.me', category: 'Social' },
-    { name: 'Gravatar', category: 'Social' },
-    { name: 'Keybase', category: 'Social' },
-    { name: 'Facebook', category: 'Social' },
-    { name: 'Gmail', category: 'Social' },
-    { name: 'Instagram', category: 'Social' },
-    { name: 'Threads', category: 'Social' },
-    { name: 'X', category: 'Social' },
-
-    { name: 'Steam', category: 'Gaming' },
-    { name: 'Chess.com', category: 'Gaming' },
-    { name: 'Lichess', category: 'Gaming' },
-    { name: 'Itch.io', category: 'Gaming' },
-    { name: 'Speedrun.com', category: 'Gaming' },
-    { name: 'Twitch', category: 'Gaming' },
-    { name: 'Poki', category: 'Gaming' },
-    { name: 'GameFAQs', category: 'Gaming' },
-    { name: 'Xbox Gamertag', category: 'Gaming' },
-
-    { name: 'Spotify', category: 'Media' },
-    { name: 'Instructables', category: 'Media' },
-    { name: 'SoundCloud', category: 'Media' },
-    { name: 'Bandcamp', category: 'Media' },
-    { name: 'Vimeo', category: 'Media' },
-    { name: 'Behance', category: 'Media' },
-    { name: 'Dribbble', category: 'Media' },
-    { name: 'Wattpad', category: 'Media' },
-    { name: 'ArtStation', category: 'Media' }
-  ];
-
-  // Derived filtered platforms to display
+  // Derived filtered platforms based on reactive selected categories and target identifier compatibility
   let filteredPlatforms = $derived(
-    platforms.filter(p => scanner.categories.includes(p.category))
+    scanner.platforms.filter(p => {
+      // 1. Category Filter Check
+      const categoryMatch = scanner.categories.includes(p.category);
+      if (!categoryMatch) return false;
+
+      // 2. Target Identifier Type Compatibility Check (Task 14)
+      if (scanner.targetType) {
+        const expectedType = p.identifierType || 'USERNAME';
+        return expectedType === scanner.targetType;
+      }
+
+      return true;
+    })
   );
 
-  // Derived summary calculations
+  // Derived calculations for real-time progress statistics
   let scannedCount = $derived(
     filteredPlatforms.filter(p => !!scanner.results[p.name]).length
   );
@@ -71,26 +31,101 @@
     filteredPlatforms.filter(p => scanner.results[p.name]?.status === 'FOUND').length
   );
 
-  let foundPlatforms = $derived(
-    filteredPlatforms
-      .filter(p => scanner.results[p.name]?.status === 'FOUND')
-      .map(p => ({
-        name: p.name,
-        category: p.category,
-        url: scanner.results[p.name]?.data?.url || '',
-        bio: scanner.results[p.name]?.data?.bio || '',
-        avatar: scanner.results[p.name]?.data?.avatar || null,
-        location: scanner.results[p.name]?.data?.location || null
-      }))
+  // Derived list of platforms with missing required session credentials
+  let missingCredentialsPlatforms = $derived(
+    scanner.platforms.filter(p => {
+      // Must match target type compatibility
+      const expectedType = p.identifierType || 'USERNAME';
+      if (scanner.targetType && expectedType !== scanner.targetType) return false;
+
+      // Must require cookies and be missing in env
+      return p.envCookieKey && !scanner.sessionStatus[p.envCookieKey];
+    })
   );
+
+  let showGuide = $state(false);
 </script>
 
 <div class="platform-grid-section">
+  <!-- Task 14: Dynamic Credentials Warning & Configuration Dashboard -->
+  {#if missingCredentialsPlatforms.length > 0}
+    <div class="breach-alert-card" style="border-color: rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.02); margin-bottom: 8px; padding: 22px; animation: fade-in-up 0.3s ease; display: flex; flex-direction: column; gap: 14px;">
+      <div class="breach-card-header" style="color: var(--accent-orange); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(245, 158, 11, 0.15); padding-bottom: 8px;">
+        <span style="font-weight: 700; display: flex; align-items: center; gap: 8px;">⚠️ Restricted platform session overrides</span>
+        <button 
+          type="button" 
+          onclick={() => showGuide = !showGuide}
+          style="background: transparent; border: 1px solid rgba(245, 158, 11, 0.3); color: var(--accent-orange); font-size: 11px; padding: 4px 10px; border-radius: 20px; cursor: pointer; transition: all 0.2s ease;"
+        >
+          {showGuide ? 'Hide Guide ▲' : 'Show Extraction Guide ▼'}
+        </button>
+      </div>
+
+      <!-- Collapsible Extraction Instructions -->
+      {#if showGuide}
+        <div style="background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.1); border-radius: 8px; padding: 14px; font-size: 13px; color: var(--text-secondary); display: flex; flex-direction: column; gap: 8px; animation: fade-in-up 0.2s ease;">
+          <h5 style="margin: 0; color: var(--text-primary); font-weight: 700;">🌐 How to extract and configure your platform cookies:</h5>
+          <ol style="margin: 0; padding-left: 18px; line-height: 1.6; display: flex; flex-direction: column; gap: 4px;">
+            <li>Install a cookie extractor extension in Chrome/Edge/Firefox (e.g. <strong><a href="https://cookie-editor.com/" target="_blank" style="color: var(--accent-blue);">Cookie-Editor</a></strong> or <strong>EditThisCookie</strong>).</li>
+            <li>Open a new browser tab, navigate to the target site (e.g., <code>linkedin.com</code> or <code>facebook.com</code>) and log in to your active account.</li>
+            <li>Click the extension icon at the top right of your browser.</li>
+            <li>Locate the main authentication key (e.g. <code>li_at</code> for LinkedIn, or <code>xs</code> and <code>c_user</code> for Facebook).</li>
+            <li>Alternatively, copy the full <strong>Header String</strong> or raw cookie text.</li>
+            <li>Paste it directly in the input box next to the matching platform below and click <strong>Apply</strong>. Overrides are safely kept in your browser local storage!</li>
+          </ol>
+        </div>
+      {/if}
+
+      <!-- Interactive Inputs list -->
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        {#each missingCredentialsPlatforms as plat}
+          <div style="display: grid; grid-template-columns: 140px 1fr 100px; align-items: center; gap: 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 8px 12px; border-radius: 8px;">
+            <span style="font-weight: 700; font-size: 13px; color: var(--text-primary);">{plat.name}</span>
+            
+            <input 
+              type="text" 
+              placeholder="Paste cookie string here (e.g. li_at=session...)"
+              value={scanner.cookieOverrides[plat.envCookieKey] || ''}
+              style="background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 6px; font-size: 12px; outline: none; font-family: var(--font-mono);"
+              onchange={(e) => {
+                const val = (e.target as HTMLInputElement).value.trim();
+                scanner.saveCookieOverride(plat.envCookieKey, val);
+              }}
+            />
+
+            <div style="display: flex; gap: 6px;">
+              {#if scanner.cookieOverrides[plat.envCookieKey]}
+                <button
+                  type="button"
+                  style="background: var(--accent-red); color: white; border: none; font-size: 11px; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 600; width: 100%;"
+                  onclick={() => scanner.saveCookieOverride(plat.envCookieKey, '')}
+                >
+                  Clear
+                </button>
+              {:else}
+                <button
+                  type="button"
+                  style="background: var(--accent-blue); color: white; border: none; font-size: 11px; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 600; width: 100%;"
+                  onclick={(e) => {
+                    const inp = (e.target as HTMLButtonElement).parentElement.previousElementSibling as HTMLInputElement;
+                    scanner.saveCookieOverride(plat.envCookieKey, inp.value.trim());
+                  }}
+                >
+                  Apply
+                </button>
+              {/if}
+            </div>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
+
   <!-- HUD Stats Header Panel -->
   <div class="search-card" style="box-shadow: var(--shadow-sm); padding: 20px 24px; gap: 16px; border-color: var(--border-color);">
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
       <div>
-        <h3 class="section-title" style="font-size: 16px;">🔍 Target Network Coverage</h3>
+        <h3 class="section-title" style="font-size: 16px;">🔍 Dynamic Network Coverage</h3>
         <span class="card-category-tag">Checked {scannedCount} of {filteredPlatforms.length} platform endpoints</span>
       </div>
 
@@ -113,66 +148,146 @@
     {/if}
   </div>
 
-  <!-- Found Results / Empty States Grid Container -->
-  {#if scannedCount === 0 && !scanner.isScanning}
+  <!-- Real-time / Found Results / Empty States Grid Container -->
+  {#if filteredPlatforms.length === 0}
+    <!-- Empty state when no categories selected -->
+    <div style="padding: 60px 24px; text-align: center; color: var(--text-secondary); background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 16px; box-shadow: var(--shadow-sm);">
+      <span style="font-size: 40px;">⚠️</span>
+      <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">No Investigation Categories Selected</h4>
+      <p style="margin: 0; font-size: 14px; max-width: 440px; line-height: 1.5;">
+        Please select at least one active investigation category chip at the top to filter and display platforms.
+      </p>
+    </div>
+  {:else if scannedCount === 0 && !scanner.isScanning}
     <!-- Empty State: Before search begins -->
     <div style="padding: 60px 24px; text-align: center; color: var(--text-secondary); background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 16px; box-shadow: var(--shadow-sm);">
       <span style="font-size: 40px;">🕵️</span>
       <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">Awaiting Target Investigation</h4>
       <p style="margin: 0; font-size: 14px; max-width: 440px; line-height: 1.5;">
-        Enter a target username or email address above, select your investigation types, and click <strong>Scan</strong> to trace digital footprints.
+        Enter a target username, email, domain, or phone above, select categories, and click <strong>Scan</strong> to resolve digital profiles in real-time.
       </p>
     </div>
-  {:else if foundCount === 0}
-    <!-- No matches yet (either scanning or nothing found) -->
-    <div style="padding: 60px 24px; text-align: center; color: var(--text-secondary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 16px; box-shadow: var(--shadow-sm);">
-      {#if scanner.isScanning}
-        <span style="font-size: 40px; display: inline-block; animation: pulse-glow 1.5s infinite;">🔎</span>
-        <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">Scanning Network Endpoints...</h4>
-        <p style="margin: 0; font-size: 14px; max-width: 440px; line-height: 1.5;">
-          Checking platform databases in parallel batches of 15. Verified matching profiles will resolve here in real-time.
-        </p>
-      {:else}
-        <span style="font-size: 40px;">∅</span>
-        <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">No Matches Identified</h4>
-        <p style="margin: 0; font-size: 14px; max-width: 440px; line-height: 1.5;">
-          The investigation was completed, but no public digital footprints matching this target were detected on the searched networks.
-        </p>
-      {/if}
-    </div>
-  {:else}
-    <!-- Render ONLY the found cards! -->
+  {:else if scanner.isScanning}
+    <!-- Render FULL scan grid with live statuses -->
     <div class="card-grid-container" style="animation: fade-in-up 0.4s ease;">
-      {#each foundPlatforms as found}
-        <div class="platform-status-card found" style="animation: fade-in-up 0.3s ease; opacity: 1;">
+      {#each filteredPlatforms as platform}
+        {@const result = scanner.results[platform.name]}
+        {@const status = result ? result.status : (scannedCount < filteredPlatforms.length ? 'PENDING' : 'NOT_FOUND')}
+        
+        <div class="platform-status-card {status.toLowerCase()}" style="animation: fade-in-up 0.25s ease;">
           <div class="card-top-row">
-            <h4 class="card-title" style="font-size: 17px;">{found.name}</h4>
-            <span class="status-badge found">Active Match</span>
+            <h4 class="card-title" style="font-size: 15px;">{platform.name}</h4>
+            <span class="status-badge {status.toLowerCase()}">{status.replace('_', ' ')}</span>
           </div>
-          
-          <span class="card-category-tag" style="font-size: 11px;">
-            {found.category} {#if found.location} • {found.location} {/if}
-          </span>
-          
-          <!-- Avatar Preview (if plucked from target profile) -->
-          {#if found.avatar}
-            <div style="display: flex; gap: 12px; align-items: center; margin-top: 4px;">
-              <img src={found.avatar} style="width: 42px; height: 42px; border-radius: 50%; border: 1.5px solid var(--border-color); object-fit: cover;" alt="{found.name} Profile avatar" />
-              <div style="display: flex; flex-direction: column; overflow: hidden;">
-                <p class="card-bio" style="margin: 0; line-clamp: 1;">{found.bio || 'Profile authenticated'}</p>
-              </div>
+
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span class="card-category-tag" style="font-size: 11px;">
+              {platform.category} • {platform.identifierType || 'USERNAME'}
+            </span>
+
+            <!-- Dynamic Schema Attribute Badges -->
+            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px;">
+              {#if platform.requiresProxy}
+                <span class="status-badge" style="background: rgba(0, 102, 255, 0.08); color: var(--accent-blue); font-size: 9px; padding: 2px 5px;">🌐 Proxy</span>
+              {/if}
+              {#if platform.riskLevel === 'HIGH'}
+                <span class="status-badge" style="background: rgba(239, 68, 68, 0.08); color: var(--accent-red); font-size: 9px; padding: 2px 5px;">⚠️ High Risk</span>
+              {/if}
+              {#if platform.envCookieKey}
+                {#if scanner.sessionStatus[platform.envCookieKey]}
+                  <span class="status-badge" style="background: rgba(16, 185, 129, 0.08); color: var(--accent-green); font-size: 9px; padding: 2px 5px;">🔑 Active Session</span>
+                {:else}
+                  <span class="status-badge" style="background: rgba(245, 158, 11, 0.08); color: var(--accent-orange); font-size: 9px; padding: 2px 5px;">⚠️ Unauthenticated</span>
+                {/if}
+              {/if}
             </div>
-          {:else}
-            {#if found.bio}
-              <p class="card-bio">{found.bio}</p>
+          </div>
+
+          {#if result?.status === 'FOUND'}
+            {#if result.data?.avatar}
+              <div style="display: flex; gap: 10px; align-items: center; margin-top: 4px;">
+                <img src={result.data.avatar} style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--border-color); object-fit: cover;" alt="{platform.name} avatar" />
+                <p class="card-bio" style="margin: 0; -webkit-line-clamp: 1;">{result.data.bio || 'Profile verified'}</p>
+              </div>
+            {:else if result.data?.bio}
+              <p class="card-bio">{result.data.bio}</p>
             {:else}
               <p class="card-bio" style="font-style: italic; opacity: 0.7;">Footprint verified. Profile active.</p>
             {/if}
+
+            <a
+              href={result.data?.url}
+              target="_blank"
+              rel="noreferrer"
+              class="dossier-export-btn"
+              style="font-size: 11px; padding: 6px 10px; border-radius: 5px; margin-top: auto; text-decoration: none; display: flex; align-items: center; justify-content: center; background: var(--text-primary); color: var(--bg-card);"
+            >
+              Visit Profile ↗
+            </a>
+          {:else}
+            <p class="card-bio" style="font-style: italic; opacity: 0.5;">
+              {#if status === 'SCANNING'}
+                Querying database index...
+              {:else if status === 'PENDING'}
+                Awaiting batch scheduler...
+              {:else}
+                No profile matches.
+              {/if}
+            </p>
+          {/if}
+        </div>
+      {/each}
+    </div>
+  {:else if foundCount === 0}
+    <!-- No matches found after scan completed -->
+    <div style="padding: 60px 24px; text-align: center; color: var(--text-secondary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 16px; box-shadow: var(--shadow-sm);">
+      <span style="font-size: 40px;">∅</span>
+      <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">No Matches Identified</h4>
+      <p style="margin: 0; font-size: 14px; max-width: 440px; line-height: 1.5;">
+        The investigation was completed, but no public digital footprints matching this target were detected on the searched networks.
+      </p>
+    </div>
+  {:else}
+    <!-- Render ONLY the found cards when scan finishes for clean presentation -->
+    <div class="card-grid-container" style="animation: fade-in-up 0.4s ease;">
+      {#each filteredPlatforms.filter(p => scanner.results[p.name]?.status === 'FOUND') as platform}
+        {@const result = scanner.results[platform.name]}
+        <div class="platform-status-card found" style="animation: fade-in-up 0.3s ease; opacity: 1;">
+          <div class="card-top-row">
+            <h4 class="card-title" style="font-size: 16px;">{platform.name}</h4>
+            <span class="status-badge found">Active Match</span>
+          </div>
+          
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span class="card-category-tag" style="font-size: 11px;">
+              {platform.category} • {platform.identifierType || 'USERNAME'}
+            </span>
+
+            <!-- Dynamic Schema Attribute Badges -->
+            <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+              {#if platform.requiresProxy}
+                <span class="status-badge" style="background: rgba(16, 185, 129, 0.08); color: var(--accent-green); font-size: 9px; padding: 2px 5px;">🌐 Proxy</span>
+              {/if}
+              {#if platform.riskLevel === 'HIGH'}
+                <span class="status-badge" style="background: rgba(239, 68, 68, 0.08); color: var(--accent-red); font-size: 9px; padding: 2px 5px;">⚠️ High Risk</span>
+              {/if}
+            </div>
+          </div>
+          
+          {#if result?.data?.avatar}
+            <div style="display: flex; gap: 12px; align-items: center; margin-top: 4px;">
+              <img src={result.data.avatar} style="width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--border-color); object-fit: cover;" alt="{platform.name} avatar" />
+              <p class="card-bio" style="margin: 0; -webkit-line-clamp: 1;">{result.data.bio || 'Profile verified'}</p>
+            </div>
+          {:else if result?.data?.bio}
+            <p class="card-bio">{result.data.bio}</p>
+          {:else}
+            <p class="card-bio" style="font-style: italic; opacity: 0.7;">Footprint verified. Profile active.</p>
           {/if}
 
           <!-- Clickable External Redirect Link -->
           <a
-            href={found.url}
+            href={result?.data?.url}
             target="_blank"
             rel="noreferrer"
             class="dossier-export-btn"

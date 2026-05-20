@@ -1,0 +1,132 @@
+name: CI — Test & Deploy
+
+on:
+  push:
+    branches:
+      - main       # Production deploy
+      - dev        # CI only
+  pull_request:
+    branches:
+      - main
+      - dev
+
+# Required for private repository access
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ────────────────────────────────────────────────────────
+  # JOB 1: Run full backend test suite
+  # ────────────────────────────────────────────────────────
+  test:
+    name: 🧪 Backend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'           # Keyed on package-lock.json hash
+
+      - name: 📦 Install dependencies (frozen lockfile)
+        run: npm ci              # Exact install from package-lock.json — faster & deterministic
+
+      - name: ✅ Run Jest test suite
+        run: npm test
+        env:
+          NODE_ENV: test
+
+  # ────────────────────────────────────────────────────────
+  # JOB 2: Build Svelte frontend
+  # ────────────────────────────────────────────────────────
+  build:
+    name: 🏗️ Frontend Build
+    runs-on: ubuntu-latest
+    needs: test                  # Only build if all tests pass
+
+    steps:
+      - name: ⬇️ Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'           # Cache hit from test job
+
+      - name: 📦 Install dependencies (frozen lockfile)
+        run: npm ci
+
+      - name: 🔨 Build Vite + Svelte
+        run: npm run build
+
+      - name: 📤 Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
+  # ────────────────────────────────────────────────────────
+  # JOB 3: Deploy to Vercel Production (main branch only)
+  # ────────────────────────────────────────────────────────
+  deploy-production:
+    name: 🚀 Deploy → Production (Vercel)
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - name: ⬇️ Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies (frozen lockfile)
+        run: npm ci
+
+      - name: 🌐 Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: 🔗 Pull Vercel environment & project config
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: 🏗️ Build for Vercel
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: 🚀 Deploy prebuilt output to production
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

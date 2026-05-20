@@ -39,7 +39,11 @@ export interface ScanSummary {
 export class ScannerState {
   // --- UI Reactive States (Svelte 5 Runes) ---
   target = $state('');
-  categories = $state<string[]>(['Tech', 'Social', 'Gaming', 'Media']);
+  categories = $state<string[]>([]);
+  platforms = $state<{ name: string; category: string; requiresProxy?: boolean; envCookieKey?: string; riskLevel?: string; identifierType?: string }[]>([]);
+  allCategories = $state<string[]>([]);
+  sessionStatus = $state<Record<string, boolean>>({});
+  cookieOverrides = $state<Record<string, string>>({});
   isScanning = $state(false);
   progress = $state({ completed: 0, total: 0, percentage: 0 });
   
@@ -70,6 +74,81 @@ export class ScannerState {
   constructor(private apiBase: string = 'http://localhost:3000') {
     // Automatically apply theme on init
     this.applyTheme();
+    this.initializeData();
+  }
+
+  async initializeData() {
+    try {
+      const catsRes = await fetch(`${this.apiBase}/api/categories`);
+      if (catsRes.ok) {
+        this.allCategories = await catsRes.json();
+        // Default to select all categories
+        this.categories = [...this.allCategories];
+      }
+
+      const platRes = await fetch(`${this.apiBase}/api/platforms`);
+      if (platRes.ok) {
+        this.platforms = await platRes.json();
+      }
+
+      const sessRes = await fetch(`${this.apiBase}/api/session-status`);
+      if (sessRes.ok) {
+        this.sessionStatus = await sessRes.json();
+      }
+
+      // Load persistent browser cookie overrides
+      this.loadCookieOverrides();
+    } catch (err) {
+      console.error('Failed to load dynamic data from backend API:', err);
+    }
+  }
+
+  loadCookieOverrides() {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('osint_cookie_overrides');
+        if (stored) {
+          this.cookieOverrides = JSON.parse(stored);
+          // Mark status as active for any overriding keys
+          for (const key of Object.keys(this.cookieOverrides)) {
+            if (this.cookieOverrides[key]) {
+              this.sessionStatus[key] = true;
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to parse cookie overrides from LocalStorage:', err);
+      }
+    }
+  }
+
+  saveCookieOverride(key: string, value: string) {
+    this.cookieOverrides[key] = value;
+    if (value) {
+      this.sessionStatus[key] = true;
+    } else {
+      // Re-check backend status if override is cleared
+      this.refreshSessionStatus();
+    }
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('osint_cookie_overrides', JSON.stringify(this.cookieOverrides));
+    }
+  }
+
+  async refreshSessionStatus() {
+    try {
+      const sessRes = await fetch(`${this.apiBase}/api/session-status`);
+      if (sessRes.ok) {
+        const status = await sessRes.json();
+        // Fall back to server status but respect other active front-end overrides
+        for (const key of Object.keys(status)) {
+          this.sessionStatus[key] = this.cookieOverrides[key] ? true : status[key];
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   // --- Theme Controls ---
@@ -108,7 +187,8 @@ export class ScannerState {
 
     const queryParams = new URLSearchParams({
       target: this.target.trim(),
-      categories: this.categories.join(',')
+      categories: this.categories.join(','),
+      cookies: JSON.stringify(this.cookieOverrides)
     });
 
     const url = `${this.apiBase}/api/scan?${queryParams.toString()}`;
@@ -221,13 +301,22 @@ export class ScannerState {
   }
 
   // --- Helper Methods ---
-  private validateTarget(): 'EMAIL' | 'USERNAME' | null {
+  private validateTarget(): 'EMAIL' | 'PHONE' | 'DOMAIN' | 'USERNAME' | null {
     const raw = this.target.trim();
     if (!raw) return null;
 
-    // Direct client-side validation reflecting same backend rules
+    // 1. Email check
     const EMAIL_REGEX = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
     if (EMAIL_REGEX.test(raw)) return 'EMAIL';
+
+    // 2. Phone check (e.g. +84987654321 or 0987654321)
+    const PHONE_REGEX = /^\+?[0-9]{7,15}$/;
+    if (PHONE_REGEX.test(raw.replace(/\s+/g, ''))) return 'PHONE';
+
+    // 3. Domain check (e.g. example.com)
+    const DOMAIN_REGEX = /^[a-zA-Z0-9\-]+\.[a-zA-Z]{2,63}$/;
+    if (DOMAIN_REGEX.test(raw)) return 'DOMAIN';
+
     return 'USERNAME';
   }
 

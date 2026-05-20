@@ -6,7 +6,11 @@
   // Svelte 5 Prop binding
   let { scanner }: { scanner: ScannerState } = $props();
 
-  const categoriesList = ['Tech', 'Social', 'Gaming', 'Media'];
+  let categoriesList = $derived(
+    scanner.allCategories.length > 0
+      ? scanner.allCategories
+      : ['Tech', 'Social', 'Gaming', 'Media']
+  );
 
   function toggleCategory(category: string) {
     if (scanner.isScanning) return; // Prevent filters modification during active scans
@@ -48,17 +52,23 @@
     <span class="search-icon-indicator">
       {#if scanner.targetType === 'EMAIL'}
         📧
-      {:else if scanner.targetType === 'USERNAME'}
-        👤
+      {:else if scanner.targetType === 'PHONE'}
+        📞
       {:else}
-        🔍
+        {#if scanner.targetType === 'DOMAIN'}
+          🌐
+        {:else if scanner.targetType === 'USERNAME'}
+          👤
+        {:else}
+          🔍
+        {/if}
       {/if}
     </span>
     
     <input
       type="text"
       class="search-input"
-      placeholder="Enter target username (e.g. '@johndoe') or email address (e.g. 'user@domain.com')"
+      placeholder="Enter target username, email address, phone number (+84...), or domain name"
       disabled={scanner.isScanning}
       bind:value={scanner.target}
       onkeydown={handleKeyDown}

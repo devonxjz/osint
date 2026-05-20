@@ -228,4 +228,60 @@ describe('OSINT Scanner Evasion Request Pipeline', () => {
       );
     });
   });
+
+  describe('Task 16: Request Pipeline Hardening & Timings', () => {
+    let dateSpy;
+
+    beforeEach(() => {
+      dateSpy = jest.spyOn(Date, 'now');
+      axios.get.mockResolvedValue({
+        status: 200,
+        data: '<html><body>Mock Profile</body></html>'
+      });
+    });
+
+    afterEach(() => {
+      dateSpy.mockRestore();
+    });
+
+    it('measures response time and returns responseTimeMs in the scan result', async () => {
+      const mockPlatform = {
+        name: 'GitHub',
+        category: 'Tech',
+        url: 'https://github.com/{}',
+        checkType: 'status',
+        checkValue: 404
+      };
+
+      // Mock start time to 1000 and end time to 1250 (250ms duration)
+      dateSpy.mockReturnValueOnce(1000); // start
+      dateSpy.mockReturnValueOnce(1250); // end
+
+      const result = await scanPlatform('johndoe', mockPlatform);
+
+      expect(result.status).toBe('FOUND');
+      expect(result.responseTimeMs).toBe(250);
+    });
+
+    it('accepts and propagates AbortSignal to axios options', async () => {
+      const mockPlatform = {
+        name: 'GitHub',
+        category: 'Tech',
+        url: 'https://github.com/{}',
+        checkType: 'status',
+        checkValue: 404
+      };
+
+      const controller = new AbortController();
+      const signal = controller.signal;
+
+      await scanPlatform('johndoe', mockPlatform, {}, signal);
+
+      expect(axios.get).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ signal })
+      );
+    });
+  });
 });
+

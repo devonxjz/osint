@@ -8,6 +8,14 @@ const cors = require('cors');
 const { analyzeInput } = require('./analyzer');
 const { getPlatforms, getAllPlatforms, getCategories } = require('./registry');
 const { scanPlatform } = require('./scanner');
+const { SSEStreamManager } = require('./sseManager');
+const { ResultCache } = require('./cache');
+const { orchestrateScan } = require('./orchestrator');
+
+const scanCache = new ResultCache({
+  maxSize: 1000,
+  defaultTtlMs: 3600000 // 1 hour TTL
+});
 
 const app = express();
 
@@ -59,129 +67,78 @@ app.get('/api/scan', async (req, res) => {
     }
   }
 
-  // 1. Configure robust SSE headers to keep persistent downstream channel open
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no' // Prevent Nginx proxy buffering
-  });
+  const sse = new SSEStreamManager(res);
+  sse.init();
 
-  // Heartbeat ping interval to keep connection alive
-  const heartbeatInterval = setInterval(() => {
-    res.write(':\n\n');
-  }, 15000);
+  const abortController = new AbortController();
 
-  let isAborted = false;
   req.on('close', () => {
-    isAborted = true;
-    clearInterval(heartbeatInterval);
+    abortController.abort();
+    sse.cleanup();
     console.log('Client closed connection. Aborting scan process.');
   });
 
-  // SSE write helper following the standard format: event: [TYPE]\ndata: [JSON]\n\n
-  const sendSSE = (event, data) => {
-    if (isAborted) return;
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-  };
-
-  // 2. Validate and sanitize raw query target parameter using Module 1
+  // 2. Validate and sanitize raw query target parameter
   const analysis = analyzeInput(target);
   if (!analysis.valid) {
-    sendSSE('error', { message: analysis.error || 'Invalid target format' });
-    clearInterval(heartbeatInterval);
-    res.end();
+    sse.send('error', { message: analysis.error || 'Invalid target format' });
+    sse.end();
     return;
   }
 
-  // 3. Resolve target platforms using Module 2 and selected categories
+  // 3. Resolve target platforms using selected categories
   const resolvedCats = categories ? categories.split(',').map(c => c.trim()) : [];
   const platforms = getPlatforms(resolvedCats);
 
   if (platforms.length === 0) {
-    sendSSE('error', { message: 'No target platforms matched the selected categories.' });
-    clearInterval(heartbeatInterval);
-    res.end();
+    sse.send('error', { message: 'No target platforms matched the selected categories.' });
+    sse.end();
     return;
   }
 
   const total = platforms.length;
-  let completed = 0;
-  let foundCount = 0;
-  const startTime = Date.now();
 
   // Send initial progress
-  sendSSE('progress', { completed: 0, total, percentage: 0 });
+  sse.send('progress', { completed: 0, total, percentage: 0 });
 
-  // 4. Batch concurrency chunking loop: 15 queries in parallel with 100ms throttle delay
-  const BATCH_SIZE = 15;
-  const THROTTLE_DELAY = 100;
-
-  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-  for (let i = 0; i < total; i += BATCH_SIZE) {
-    if (isAborted) break;
-
-    const chunk = platforms.slice(i, i + BATCH_SIZE);
-
-    const scanPromises = chunk.map(async (platform) => {
-      if (isAborted) return;
-      try {
-        const result = await scanPlatform(analysis.sanitized, platform, cookieOverrides);
-
-        if (isAborted) return;
-        completed++;
-        if (result.status === 'FOUND') {
-          foundCount++;
+  try {
+    const summary = await orchestrateScan(
+      analysis.sanitized,
+      platforms,
+      {
+        onResult: (result) => {
+          sse.send('result', result);
+        },
+        onProgress: (progress) => {
+          sse.send('progress', progress);
+        },
+        onError: (platformName, errMsg) => {
+          sse.send('result', {
+            platform: platformName,
+            status: 'NOT_FOUND',
+            url: '',
+            error: errMsg
+          });
         }
-
-        // Stream completed scan result immediately
-        sendSSE('result', result);
-
-        // Stream current progress metrics
-        sendSSE('progress', {
-          completed,
-          total,
-          percentage: parseFloat(((completed / total) * 100).toFixed(1))
-        });
-      } catch (err) {
-        if (isAborted) return;
-        completed++;
-        sendSSE('result', {
-          platform: platform.name,
-          status: 'NOT_FOUND',
-          url: platform.url.replace('{}', encodeURIComponent(analysis.sanitized)),
-          error: err.message
-        });
-        sendSSE('progress', {
-          completed,
-          total,
-          percentage: parseFloat(((completed / total) * 100).toFixed(1))
-        });
+      },
+      {
+        maxConcurrency: 20,
+        highRiskConcurrency: 3,
+        cache: scanCache,
+        signal: abortController.signal
       }
-    });
+    );
 
-    // Wait for current batch chunk to finish
-    await Promise.all(scanPromises);
-
-    // Apply throttle delay if more platforms are remaining
-    if (i + BATCH_SIZE < total && !isAborted) {
-      await delay(THROTTLE_DELAY);
+    if (!abortController.signal.aborted) {
+      sse.send('end', { summary });
     }
+  } catch (err) {
+    if (!abortController.signal.aborted) {
+      sse.send('error', { message: err.message });
+    }
+  } finally {
+    sse.end();
   }
-
-  // 5. Send final summary event on complete
-  if (!isAborted) {
-    sendSSE('end', {
-      summary: {
-        foundCount,
-        timeTakenMs: Date.now() - startTime
-      }
-    });
-  }
-
-  clearInterval(heartbeatInterval);
-  res.end();
 });
 
 // Start Express Listener only when run directly

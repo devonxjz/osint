@@ -1,6 +1,12 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const url = require('url');
+const http = require('http');
+const https = require('https');
+
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 30 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 30 });
+
 
 const USER_AGENTS = [
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -73,7 +79,7 @@ function extractMetadata(html, platformName) {
 /**
  * Scans a single username on a single platform
  */
-async function scanPlatform(username, platform, cookieOverrides = {}) {
+async function scanPlatform(username, platform, cookieOverrides = {}, signal = null) {
   const targetUrl = platform.url.replace('{}', encodeURIComponent(username));
   const userAgent = getRandomUserAgent();
 
@@ -95,6 +101,8 @@ async function scanPlatform(username, platform, cookieOverrides = {}) {
       };
     }
   }
+
+  const startTime = Date.now();
 
   try {
     // 2. Build headers dynamically
@@ -126,9 +134,13 @@ async function scanPlatform(username, platform, cookieOverrides = {}) {
       headers,
       timeout: platform.timeout || 5000,
       proxy,
-      validateStatus: () => true // Allow any status code so we can check it
+      validateStatus: () => true, // Allow any status code so we can check it
+      httpAgent,
+      httpsAgent,
+      signal
     });
 
+    const responseTimeMs = Date.now() - startTime;
     const status = response.status;
     const html = response.data;
 
@@ -176,7 +188,7 @@ async function scanPlatform(username, platform, cookieOverrides = {}) {
           if (bio.includes(phrase) || lowerUsername.includes(phrase)) {
             continue;
           }
-          return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl };
+          return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
         }
       }
     }
@@ -187,24 +199,25 @@ async function scanPlatform(username, platform, cookieOverrides = {}) {
         platform: platform.name, 
         status: 'NOT_FOUND', 
         url: targetUrl, 
-        error: 'BLOCKED_BY_WAF' 
+        error: 'BLOCKED_BY_WAF',
+        responseTimeMs
       };
     }
 
     // 1. Check HTTP status rules
     if (platform.checkType === 'status' && status === platform.checkValue) {
-      return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl };
+      return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
     }
 
     // Treat 404 as not found by default
     if (status === 404) {
-      return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl };
+      return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
     }
 
     // 2. Check text rules (false positive checking)
     if (platform.checkType === 'text' && typeof html === 'string') {
       if (html.includes(platform.checkValue)) {
-        return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl };
+        return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
       }
     }
 
@@ -212,13 +225,13 @@ async function scanPlatform(username, platform, cookieOverrides = {}) {
     if (platform.checkType === 'selector' && typeof html === 'string') {
       const $ = cheerio.load(html);
       if ($(platform.checkValue).length === 0) {
-        return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl };
+        return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
       }
     }
 
     // Standard check if page is actually returning error-like content
     if (status >= 400) {
-      return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl };
+      return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
     }
 
     // If passed all rules, user exists!
@@ -227,17 +240,21 @@ async function scanPlatform(username, platform, cookieOverrides = {}) {
       platform: platform.name,
       status: 'FOUND',
       url: targetUrl,
+      responseTimeMs,
       ...metadata
     };
 
   } catch (error) {
+    const responseTimeMs = Date.now() - startTime;
+
     // If request timeout or network error, check if it was raw Axios block
     if (error.response && (error.response.status === 429 || error.response.status === 403)) {
       return {
         platform: platform.name,
         status: 'NOT_FOUND',
         url: targetUrl,
-        error: 'BLOCKED_BY_WAF'
+        error: 'BLOCKED_BY_WAF',
+        responseTimeMs
       };
     }
 
@@ -245,7 +262,8 @@ async function scanPlatform(username, platform, cookieOverrides = {}) {
       platform: platform.name,
       status: 'NOT_FOUND',
       url: targetUrl,
-      error: error.message
+      error: error.message,
+      responseTimeMs
     };
   }
 }

@@ -32,15 +32,12 @@ graph LR
 
 ### Khởi chạy Backend (Cửa sổ Terminal 1)
 ```bash
-cd be
 npm install
-npm run dev
+npm run server
 ```
 
 ### Khởi chạy Frontend (Cửa sổ Terminal 2)
 ```bash
-cd fe
-npm install
 npm run dev
 ```
 

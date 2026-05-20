@@ -65,11 +65,27 @@ export class ScannerState {
   // Global Theme Toggling State ('light' | 'dark')
   theme = $state<'light' | 'dark'>('dark');
 
+  // Performance Buffering for Svelte UI 60FPS lock
+  private progressBuffer: { completed: number; total: number; percentage: number } | null = null;
+  private resultBuffer: ScanResult[] = [];
+  private logBuffer: string[] = [];
+  private rafHandle: number | null = null;
+
+  // Scan timing for ETA
+  scanStartTime = $state<number | null>(null);
+
   // Internal connection handle
   private eventSource: EventSource | null = null;
 
   // --- Derived Reactive States ---
   targetType = $derived(this.validateTarget());
+  etaSeconds = $derived.by(() => {
+    if (!this.isScanning || !this.scanStartTime || this.progress.completed === 0) return null;
+    const elapsedMs = Date.now() - this.scanStartTime;
+    const speed = this.progress.completed / (elapsedMs / 1000); // platforms scanned per second
+    const remaining = this.progress.total - this.progress.completed;
+    return speed > 0 ? Math.ceil(remaining / speed) : null;
+  });
 
   constructor(private apiBase: string = 'http://localhost:3000') {
     // Automatically apply theme on init
@@ -171,11 +187,80 @@ export class ScannerState {
   }
 
   // --- Scanning Methods ---
+  private startUpdateLoop() {
+    if (this.rafHandle !== null) return;
+
+    const update = () => {
+      // Flush progress
+      if (this.progressBuffer !== null) {
+        this.progress = this.progressBuffer;
+        this.progressBuffer = null;
+      }
+
+      // Flush results
+      if (this.resultBuffer.length > 0) {
+        for (const res of this.resultBuffer) {
+          const status: CardStatus = res.status === 'FOUND' ? 'FOUND' : 'NOT_FOUND';
+          this.results[res.platform] = { status, data: res };
+          
+          if (res.avatar && !this.avatarUrl) {
+            this.avatarUrl = res.avatar;
+          }
+        }
+        this.resultBuffer = [];
+      }
+
+      // Flush logs
+      if (this.logBuffer.length > 0) {
+        this.logs = [...this.logs, ...this.logBuffer];
+        this.logBuffer = [];
+      }
+
+      if (this.isScanning) {
+        this.rafHandle = typeof window !== 'undefined' ? requestAnimationFrame(update) : setTimeout(update, 16) as any;
+      } else {
+        this.rafHandle = null;
+      }
+    };
+
+    this.rafHandle = typeof window !== 'undefined' ? requestAnimationFrame(update) : setTimeout(update, 16) as any;
+  }
+
+  private flushBuffers() {
+    if (this.progressBuffer !== null) {
+      this.progress = this.progressBuffer;
+      this.progressBuffer = null;
+    }
+    if (this.resultBuffer.length > 0) {
+      for (const res of this.resultBuffer) {
+        const status: CardStatus = res.status === 'FOUND' ? 'FOUND' : 'NOT_FOUND';
+        this.results[res.platform] = { status, data: res };
+        if (res.avatar && !this.avatarUrl) {
+          this.avatarUrl = res.avatar;
+        }
+      }
+      this.resultBuffer = [];
+    }
+    if (this.logBuffer.length > 0) {
+      this.logs = [...this.logs, ...this.logBuffer];
+      this.logBuffer = [];
+    }
+    if (this.rafHandle !== null) {
+      if (typeof window !== 'undefined') {
+        cancelAnimationFrame(this.rafHandle);
+      } else {
+        clearTimeout(this.rafHandle);
+      }
+      this.rafHandle = null;
+    }
+  }
+
   async startScan() {
     if (this.isScanning || !this.target.trim()) return;
 
     // Reset state before beginning
     this.isScanning = true;
+    this.scanStartTime = Date.now();
     this.progress = { completed: 0, total: 0, percentage: 0 };
     this.results = {};
     this.logs = [`[+] Starting scan on target: "${this.target.trim()}"...`];
@@ -184,6 +269,14 @@ export class ScannerState {
     this.breaches = [];
     this.hasGravatar = false;
     this.avatarUrl = null;
+
+    // Initialize frame-buffers
+    this.progressBuffer = null;
+    this.resultBuffer = [];
+    this.logBuffer = [];
+    
+    // Start RAF Update loop
+    this.startUpdateLoop();
 
     const queryParams = new URLSearchParams({
       target: this.target.trim(),
@@ -233,38 +326,33 @@ export class ScannerState {
     
     this.isScanning = false;
     this.logs.push('[-] Scan canceled and socket closed by user.');
+    this.flushBuffers();
   }
 
   // --- SSE Event Handlers ---
   private handleProgress(data: { completed: number; total: number; percentage: number }) {
-    this.progress = data;
-    this.logs.push(`[+] Progress updated: ${data.completed}/${data.total} platforms checked (${data.percentage}%).`);
+    this.progressBuffer = data;
+    this.logBuffer.push(`[+] Progress updated: ${data.completed}/${data.total} platforms checked (${data.percentage}%).`);
   }
 
-  private handleResult(data: ScanResult) {
-    // 1. Map to state machine statuses
-    const status: CardStatus = data.status === 'FOUND' ? 'FOUND' : 'NOT_FOUND';
-    
-    this.results[data.platform] = {
-      status,
-      data
-    };
+  private handleResult(data: ScanResult & { responseTimeMs?: number }) {
+    this.resultBuffer.push(data as any);
 
-    // 2. Stream to console log panel
+    const status = data.status === 'FOUND' ? 'FOUND' : 'NOT_FOUND';
+    const timeStr = data.responseTimeMs !== undefined ? ` (${data.responseTimeMs}ms)` : '';
+
     if (status === 'FOUND') {
-      this.logs.push(`[✓] FOUND: ${data.platform} -> ${data.url}`);
-      // If we plucked an avatar from profile (e.g. GitHub), update primary avatar
-      if (data.avatar && !this.avatarUrl) {
-        this.avatarUrl = data.avatar;
-      }
+      this.logBuffer.push(`[✓] FOUND: ${data.platform} -> ${data.url}${timeStr}`);
     } else {
-      this.logs.push(`[ ] Checked ${data.platform}... NOT FOUND`);
+      this.logBuffer.push(`[ ] Checked ${data.platform}... NOT FOUND${timeStr}`);
     }
   }
 
   private handleError(message: string) {
-    this.logs.push(`[!] ERROR: ${message}`);
     this.isScanning = false;
+    this.flushBuffers();
+    this.logs.push(`[!] ERROR: ${message}`);
+    
     if (this.eventSource) {
       this.eventSource.close();
       this.eventSource = null;
@@ -274,6 +362,7 @@ export class ScannerState {
   private handleEnd(data: { summary: ScanSummary }) {
     this.summary = data.summary;
     this.isScanning = false;
+    this.flushBuffers();
     this.logs.push(`[✓] Scan completed in ${data.summary.timeTakenMs}ms. Found on ${data.summary.foundCount} platform(s).`);
 
     // Clean close

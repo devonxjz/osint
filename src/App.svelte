@@ -43,6 +43,9 @@
       <div class="progress-info">
         <span style="color: var(--text-primary);">Scanning target digital profiles...</span>
         <span style="color: var(--accent-blue);">
+          {#if scanner.etaSeconds !== null}
+            <span style="margin-right: 8px; color: var(--accent-purple);">ETA: {scanner.etaSeconds}s |</span>
+          {/if}
           {scanner.progress.completed} / {scanner.progress.total} platforms ({scanner.progress.percentage}%)
         </span>
       </div>

@@ -5,6 +5,11 @@ on:
     branches:
       - dev
 
+# Required for private repository access + PR comments
+permissions:
+  contents: read
+  pull-requests: write
+
 concurrency:
   group: preview-${{ github.ref }}
   cancel-in-progress: true
@@ -16,6 +21,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
@@ -32,11 +39,11 @@ jobs:
     name: 🔍 Deploy Preview (Vercel)
     runs-on: ubuntu-latest
     needs: test
-    permissions:
-      pull-requests: write              # Allow posting comment with preview URL
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:

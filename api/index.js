@@ -11,6 +11,9 @@ const { scanPlatform } = require('./scanner');
 const { SSEStreamManager } = require('./sseManager');
 const { ResultCache } = require('./cache');
 const { orchestrateScan } = require('./orchestrator');
+const { orchestrateEmailScan } = require('./email/email_orchestrator');
+const { generateDossierPDF } = require('./email/pdf_generator');
+const { orchestratePhoneScan } = require('./phone/phone_orchestrator');
 
 const scanCache = new ResultCache({
   maxSize: 1000,
@@ -138,6 +141,112 @@ app.get('/api/scan', async (req, res) => {
     }
   } finally {
     sse.end();
+  }
+});
+
+/**
+ * SSE endpoint for real-time email OSINT scanning.
+ * GET /api/scan-email?target=user@example.com
+ */
+app.get('/api/scan-email', async (req, res) => {
+  const { target } = req.query;
+  const sse = new SSEStreamManager(res);
+  sse.init();
+
+  const abortController = new AbortController();
+  req.on('close', () => {
+    abortController.abort();
+    sse.cleanup();
+  });
+
+  if (!target || typeof target !== 'string' || !target.includes('@')) {
+    sse.send('error', { message: 'Invalid email address' });
+    sse.end();
+    return;
+  }
+
+  try {
+    const dossier = await orchestrateEmailScan(target.trim(), {
+      onEvent: (event) => {
+        if (!abortController.signal.aborted) {
+          sse.send('result', event);
+        }
+      },
+      hibpApiKey: process.env.HIBP_API_KEY || null,
+    });
+
+    if (!abortController.signal.aborted) {
+      sse.send('end', { dossier });
+    }
+  } catch (err) {
+    if (!abortController.signal.aborted) {
+      sse.send('error', { message: err.message });
+    }
+  } finally {
+    sse.end();
+  }
+});
+
+/**
+ * SSE endpoint for real-time phone OSINT scanning.
+ * GET /api/scan-phone?target=+84987654321
+ */
+app.get('/api/scan-phone', async (req, res) => {
+  const { target } = req.query;
+  const sse = new SSEStreamManager(res);
+  sse.init();
+
+  const abortController = new AbortController();
+  req.on('close', () => {
+    abortController.abort();
+    sse.cleanup();
+  });
+
+  if (!target || typeof target !== 'string') {
+    sse.send('error', { message: 'Invalid phone number target' });
+    sse.end();
+    return;
+  }
+
+  try {
+    const dossier = await orchestratePhoneScan(target.trim(), {
+      onEvent: (event) => {
+        if (!abortController.signal.aborted) {
+          sse.send('result', event);
+        }
+      }
+    });
+
+    if (!abortController.signal.aborted) {
+      sse.send('end', { dossier });
+    }
+  } catch (err) {
+    if (!abortController.signal.aborted) {
+      sse.send('error', { message: err.message });
+    }
+  } finally {
+    sse.end();
+  }
+});
+
+
+/**
+ * POST /api/dossier — Generate and download PDF dossier.
+ * Accepts the consolidated dossier JSON in request body.
+ */
+app.post('/api/dossier', async (req, res) => {
+  try {
+    const dossier = req.body;
+    if (!dossier || (!dossier.email && !dossier.phone)) {
+      return res.status(400).json({ error: 'Missing dossier data' });
+    }
+
+    const pdfBuffer = await generateDossierPDF(dossier);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="dossier_${Date.now()}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

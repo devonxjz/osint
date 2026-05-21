@@ -7,6 +7,8 @@
   import LogConsole from './lib/LogConsole.svelte';
   import BreachCard from './lib/BreachCard.svelte';
   import DossierSummary from './lib/DossierSummary.svelte';
+  import PhoneDossierPanel from './lib/PhoneDossierPanel.svelte';
+  import EmailDossierPanel from './lib/EmailDossierPanel.svelte';
 
   const scanner = new ScannerState(typeof window !== 'undefined' ? window.location.origin : '');
 </script>
@@ -57,12 +59,18 @@
 
   <!-- Main Multi-Column Workspace Grid -->
   <main class="dashboard-grid">
-    <!-- Left Column: Platforms Status Grid -->
+    <!-- Left Column: Contextual Intelligence Output -->
     <div style="display: flex; flex-direction: column; gap: 32px;">
-      <CardGrid {scanner} />
+      {#if scanner.targetType === 'PHONE'}
+        <PhoneDossierPanel {scanner} />
+      {:else if scanner.targetType === 'EMAIL'}
+        <EmailDossierPanel {scanner} />
+      {:else}
+        <CardGrid {scanner} />
+      {/if}
     </div>
 
-    <!-- Right Column: Console Terminal Shell & Dossier Summaries -->
+    <!-- Right Column: Operational Control Panel -->
     <div style="display: flex; flex-direction: column; gap: 32px;">
       <LogConsole {scanner} />
       <DossierSummary {scanner} />
@@ -70,3 +78,4 @@
     </div>
   </main>
 </div>
+

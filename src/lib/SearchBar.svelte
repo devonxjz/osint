@@ -30,22 +30,24 @@
 </script>
 
 <div class="search-card">
-  <div class="category-filter-row">
-    <span class="filter-label">Target Investigation Types</span>
-    <div class="chips-container">
-      {#each categoriesList as category}
-        <button
-          type="button"
-          class="chip"
-          class:selected={scanner.categories.includes(category)}
-          disabled={scanner.isScanning}
-          onclick={() => toggleCategory(category)}
-        >
-          {category}
-        </button>
-      {/each}
+  {#if scanner.targetType === 'USERNAME' || scanner.targetType === null || !scanner.target.trim()}
+    <div class="category-filter-row">
+      <span class="filter-label">Target Investigation Types</span>
+      <div class="chips-container">
+        {#each categoriesList as category}
+          <button
+            type="button"
+            class="chip"
+            class:selected={scanner.categories.includes(category)}
+            disabled={scanner.isScanning}
+            onclick={() => toggleCategory(category)}
+          >
+            {category}
+          </button>
+        {/each}
+      </div>
     </div>
-  </div>
+  {/if}
 
   <div class="search-box-wrapper">
     <!-- Dynamic Icon Indicator based on validation type -->
@@ -86,7 +88,7 @@
       <button
         type="button"
         class="scan-action-btn"
-        disabled={!scanner.target.trim() || scanner.categories.length === 0}
+        disabled={!scanner.target.trim() || (scanner.targetType === 'USERNAME' && scanner.categories.length === 0)}
         onclick={() => scanner.startScan()}
       >
         Scan
@@ -94,3 +96,4 @@
     {/if}
   </div>
 </div>
+

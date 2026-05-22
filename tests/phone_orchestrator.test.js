@@ -1,8 +1,8 @@
 'use strict';
 
 const axios = require('axios');
-const app = require('../api/index');
-const { orchestratePhoneScan } = require('../api/phone/phone_orchestrator');
+const app = require('../backend/index');
+const { orchestratePhoneScan } = require('../backend/phone/phone_orchestrator');
 
 describe('Phone Scan Orchestrator Module', () => {
   let server;
@@ -80,7 +80,7 @@ describe('Phone Scan Orchestrator Module', () => {
   // Behavior 5: Per-lane error isolation — one lane crash should not kill the entire scan
   test('if one lane throws, orchestrator still returns partial results from other lanes', async () => {
     // Monkey-patch caller_id to simulate a crash
-    const callerIdModule = require('../api/phone/caller_id');
+    const callerIdModule = require('../backend/phone/caller_id');
     const originalLookup = callerIdModule.lookupCallerID;
     callerIdModule.lookupCallerID = async () => { throw new Error('Simulated Twilio timeout'); };
 

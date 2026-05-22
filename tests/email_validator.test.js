@@ -1,6 +1,6 @@
 'use strict';
 
-const { validateEmail } = require('../api/email/validator');
+const { validateEmail } = require('../backend/email/validator');
 
 describe('Email Validator', () => {
   // Behavior 1: Valid email passes RFC 5322 syntax check

@@ -1,7 +1,7 @@
 'use strict';
 
-const { discoverSocialProfiles } = require('../api/phone/social_sync');
-const { getDeterministicProfile } = require('../api/phone/caller_id');
+const { discoverSocialProfiles } = require('../backend/phone/social_sync');
+const { getDeterministicProfile } = require('../backend/phone/caller_id');
 
 describe('Phone Social Media & App Sync Discovery', () => {
   // Behavior 1: Consistent Facebook Discovery matches

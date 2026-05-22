@@ -1,6 +1,6 @@
 'use strict';
 
-const { lookupGravatar, computeGravatarHash } = require('../api/email/gravatar');
+const { lookupGravatar, computeGravatarHash } = require('../backend/email/gravatar');
 
 describe('Gravatar & Avatar Intelligence', () => {
   // Behavior 1: MD5 hash normalization — trim + lowercase before hashing

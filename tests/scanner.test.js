@@ -1,7 +1,7 @@
 'use strict';
 
 const axios = require('axios');
-const { scanPlatform } = require('../api/scanner');
+const { scanPlatform } = require('../backend/scanner');
 
 // Mock Axios to capture request arguments
 jest.mock('axios');

@@ -97,6 +97,13 @@ export class ScannerState {
   // Telephone-specific States
   phoneDossier = $state<PhoneDossier | null>(null);
 
+  // Identity/Name-specific States
+  identityDossier = $state<any>(null);
+  deepScanEnabled = $state(false);
+
+  // Domain-specific States
+  domainDossier = $state<any>(null);
+
   // Global Theme Toggling State ('light' | 'dark')
   theme = $state<'light' | 'dark'>('dark');
 
@@ -308,6 +315,8 @@ export class ScannerState {
     this.identityResult = null;
     this.emailPermutations = { workEmails: [], personalEmails: [] };
     this.phoneDossier = null;
+    this.identityDossier = null;
+    this.domainDossier = null;
 
     // Initialize frame-buffers
     this.progressBuffer = null;
@@ -322,6 +331,10 @@ export class ScannerState {
       this.startEmailScan();
     } else if (this.targetType === 'PHONE') {
       this.startPhoneScan();
+    } else if (this.targetType === 'REAL_NAME') {
+      this.startRealNameScan();
+    } else if (this.targetType === 'DOMAIN') {
+      this.startDomainScan();
     } else {
       this.startUsernameScan();
     }
@@ -684,7 +697,112 @@ export class ScannerState {
   }
 
   // --- Helper Methods ---
-  private validateTarget(): 'EMAIL' | 'PHONE' | 'DOMAIN' | 'USERNAME' | null {
+  private startRealNameScan() {
+    const queryParams = new URLSearchParams({
+      target: this.target.trim(),
+      deep_scan: this.deepScanEnabled ? 'true' : 'false',
+      cookies: JSON.stringify(this.cookieOverrides)
+    });
+    const url = `${this.apiBase}/api/scan?${queryParams.toString()}`;
+    
+    this.logs.push('[+] Routing to Identity Resolution (Real Name) pipeline...');
+    this.logs.push('[+] Establishing SSE stream for identity scan...');
+    
+    this.progress = { completed: 0, total: 15, percentage: 0 };
+    
+    try {
+      this.eventSource = new EventSource(url);
+      
+      this.eventSource.addEventListener('progress', (e: MessageEvent) => {
+        const parsed = JSON.parse(e.data);
+        this.progress = parsed;
+        this.logs.push(`[+] Progress updated: ${parsed.completed}/${parsed.total} platforms checked (${parsed.percentage}%).`);
+      });
+      
+      this.eventSource.addEventListener('result', (e: MessageEvent) => {
+        const parsed = JSON.parse(e.data);
+        this.resultBuffer.push(parsed);
+        const status = parsed.status === 'FOUND' ? '[✓] FOUND' : '[ ] NOT FOUND';
+        this.logs.push(`${status}: ${parsed.platform} (${parsed.variant}) -> ${parsed.url}`);
+      });
+      
+      this.eventSource.addEventListener('end', (e: MessageEvent) => {
+        const parsed = JSON.parse(e.data);
+        this.identityDossier = parsed.dossier;
+        this.summary = { foundCount: parsed.dossier?.found?.length || 0, timeTakenMs: Date.now() - (this.scanStartTime || 0) };
+        this.isScanning = false;
+        this.flushBuffers();
+        this.logs.push(`[✓] Identity scan complete. Confidence score: ${parsed.dossier?.confidence || 'LOW'}`);
+        
+        if (this.eventSource) {
+          this.eventSource.close();
+          this.eventSource = null;
+        }
+      });
+      
+      this.eventSource.addEventListener('error', (e: Event) => {
+        if (this.isScanning) {
+          this.handleError('SSE stream connection error during identity scan.');
+        }
+      });
+    } catch (err: any) {
+      this.handleError(err.message || 'Failed to initiate SSE connection.');
+    }
+  }
+
+  private startDomainScan() {
+    const queryParams = new URLSearchParams({ target: this.target.trim() });
+    const url = `${this.apiBase}/api/scan?${queryParams.toString()}`;
+    
+    this.logs.push('[+] Routing to Domain Intelligence pipeline...');
+    this.logs.push('[+] Establishing SSE stream for domain resolution...');
+    
+    this.progress = { completed: 0, total: 100, percentage: 0 };
+    
+    try {
+      this.eventSource = new EventSource(url);
+      
+      this.eventSource.addEventListener('progress', (e: MessageEvent) => {
+        const parsed = JSON.parse(e.data);
+        this.progress = parsed;
+        this.logs.push(`[+] Progress: ${parsed.completed}/${parsed.total} subdomains resolved (${parsed.percentage}%).`);
+      });
+      
+      this.eventSource.addEventListener('result', (e: MessageEvent) => {
+        const parsed = JSON.parse(e.data);
+        if (parsed.status === 'INFO') {
+          this.logs.push(`[!] INFO: ${parsed.message}`);
+        } else {
+          this.resultBuffer.push(parsed);
+          this.logs.push(`[✓] SUBDOMAIN: ${parsed.subdomain} -> ${parsed.ip} (Cloudflare: ${parsed.isCloudflare ? 'Yes' : 'No'})`);
+        }
+      });
+      
+      this.eventSource.addEventListener('end', (e: MessageEvent) => {
+        const parsed = JSON.parse(e.data);
+        this.domainDossier = parsed.dossier;
+        this.summary = { foundCount: parsed.dossier?.subdomains?.length || 0, timeTakenMs: Date.now() - (this.scanStartTime || 0) };
+        this.isScanning = false;
+        this.flushBuffers();
+        this.logs.push(`[✓] Domain scan complete. Subdomains identified: ${parsed.dossier?.subdomains?.length || 0}`);
+        
+        if (this.eventSource) {
+          this.eventSource.close();
+          this.eventSource = null;
+        }
+      });
+      
+      this.eventSource.addEventListener('error', (e: Event) => {
+        if (this.isScanning) {
+          this.handleError('SSE stream connection error during domain resolution.');
+        }
+      });
+    } catch (err: any) {
+      this.handleError(err.message || 'Failed to initiate SSE connection.');
+    }
+  }
+
+  private validateTarget(): 'EMAIL' | 'PHONE' | 'DOMAIN' | 'REAL_NAME' | 'USERNAME' | null {
     const raw = this.target.trim();
     if (!raw) return null;
 
@@ -692,16 +810,31 @@ export class ScannerState {
     const EMAIL_REGEX = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
     if (EMAIL_REGEX.test(raw)) return 'EMAIL';
 
-    // 2. Phone check (e.g. +84987654321 or 0987654321)
-    const PHONE_REGEX = /^\+?[0-9]{7,15}$/;
-    if (PHONE_REGEX.test(raw.replace(/\s+/g, ''))) return 'PHONE';
+    // 2. Phone check (E.164 or VN local numbers)
+    const cleanPhone = raw.replace(/[\s\-\(\)\.]/g, '').replace('+', '');
+    if (/^\d+$/.test(cleanPhone)) {
+      const isE164 = (raw.startsWith('+') || raw.startsWith('00')) && cleanPhone.length >= 7 && cleanPhone.length <= 15;
+      const isLocal = raw.startsWith('0') && raw.length >= 9 && raw.length <= 11;
+      if (isE164 || isLocal) {
+        return 'PHONE';
+      }
+    }
 
-    // 3. Domain check (e.g. example.com)
-    const DOMAIN_REGEX = /^[a-zA-Z0-9\-]+\.[a-zA-Z]{2,63}$/;
-    if (DOMAIN_REGEX.test(raw)) return 'DOMAIN';
+    // 3. Domain check
+    const cleanDomain = raw.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0].split('?')[0];
+    const RECOGNIZED_TLDS = new Set(['com', 'org', 'net', 'edu', 'gov', 'vn', 'io', 'me', 'co', 'app', 'dev']);
+    const parts = cleanDomain.split('.');
+    if (parts.length >= 2 && RECOGNIZED_TLDS.has(parts[parts.length - 1])) {
+      return 'DOMAIN';
+    }
+
+    // 4. Real Name check
+    const nameWords = raw.split(/\s+/).filter(Boolean);
+    if (nameWords.length >= 2 && nameWords.length <= 5) {
+      const isName = nameWords.every(w => /^[a-zA-Z\u00C0-\u1EF9]+$/i.test(w));
+      if (isName) return 'REAL_NAME';
+    }
 
     return 'USERNAME';
   }
-
-  // mockEmailBreachData removed — now using real backend data from email orchestrator
 }

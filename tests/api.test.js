@@ -1,7 +1,26 @@
-'use strict';
-
-const app = require('../api/index');
+const app = require('../backend/index');
 const axios = require('axios');
+
+// Mock scanner to avoid live outbound API calls in routing tests
+jest.mock('../backend/scanner', () => ({
+  scanPlatform: jest.fn().mockResolvedValue({
+    status: 'NOT_FOUND',
+    platform: 'MockPlatform',
+    url: 'http://mock'
+  })
+}));
+
+// Mock domainEngine to avoid live crt.sh/dns outbound calls in routing tests
+jest.mock('../backend/domainEngine', () => ({
+  resolveDomainIntel: jest.fn().mockResolvedValue({
+    domain: 'mock.com',
+    whois: { registrar: 'Mock Registrar', created: '2020-01-01', status: [], nameservers: [] },
+    subdomains: [],
+    certificates: [],
+    wildcardDetected: false,
+    timeTakenMs: 10
+  })
+}));
 
 describe('SSE API Routing', () => {
   let server;
@@ -94,5 +113,26 @@ describe('SSE API Routing', () => {
     expect(response.status).toBe(200);
     expect(response.data).toHaveProperty('FACEBOOK_COOKIE_KEY', true);
     expect(response.data).toHaveProperty('LINKEDIN_COOKIE_KEY', false);
+  });
+
+  it('should route a REAL_NAME query through the unified scan endpoint and stream progress/results', async () => {
+    const response = await axios.get(`${baseUrl}/api/scan?target=John+Doe`, {
+      responseType: 'text'
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers['content-type']).toContain('text/event-stream');
+    expect(response.data).toContain('event: progress');
+    expect(response.data).toContain('event: end');
+  });
+
+  it('should route a DOMAIN query through the unified scan endpoint and stream progress/results', async () => {
+    const response = await axios.get(`${baseUrl}/api/scan?target=google.com`, {
+      responseType: 'text'
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers['content-type']).toContain('text/event-stream');
+    expect(response.data).toContain('event: end');
   });
 });

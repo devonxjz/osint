@@ -1,5 +1,9 @@
 /* Elegant Glassmorphic Cyberpunk OSINT Design System */
 
+*, ::before, ::after {
+  box-sizing: border-box;
+}
+
 :root {
   /* HSL Color System - Light Premium Pastel Theme */
   --hue: 240;

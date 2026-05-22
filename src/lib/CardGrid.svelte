@@ -85,20 +85,20 @@
             <input 
               type="text" 
               placeholder="Paste cookie string here (e.g. li_at=session...)"
-              value={scanner.cookieOverrides[plat.envCookieKey] || ''}
+              value={scanner.cookieOverrides[plat.envCookieKey || ''] || ''}
               style="background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 6px; font-size: 12px; outline: none; font-family: var(--font-mono);"
               onchange={(e) => {
                 const val = (e.target as HTMLInputElement).value.trim();
-                scanner.saveCookieOverride(plat.envCookieKey, val);
+                scanner.saveCookieOverride(plat.envCookieKey || '', val);
               }}
             />
 
             <div style="display: flex; gap: 6px;">
-              {#if scanner.cookieOverrides[plat.envCookieKey]}
+              {#if scanner.cookieOverrides[plat.envCookieKey || '']}
                 <button
                   type="button"
                   style="background: var(--accent-red); color: white; border: none; font-size: 11px; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 600; width: 100%;"
-                  onclick={() => scanner.saveCookieOverride(plat.envCookieKey, '')}
+                  onclick={() => scanner.saveCookieOverride(plat.envCookieKey || '', '')}
                 >
                   Clear
                 </button>
@@ -107,8 +107,8 @@
                   type="button"
                   style="background: var(--accent-blue); color: white; border: none; font-size: 11px; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 600; width: 100%;"
                   onclick={(e) => {
-                    const inp = (e.target as HTMLButtonElement).parentElement.previousElementSibling as HTMLInputElement;
-                    scanner.saveCookieOverride(plat.envCookieKey, inp.value.trim());
+                    const inp = (e.target as HTMLButtonElement).parentElement?.previousElementSibling as HTMLInputElement;
+                    scanner.saveCookieOverride(plat.envCookieKey || '', inp?.value?.trim() || '');
                   }}
                 >
                   Apply
@@ -235,7 +235,7 @@
               target="_blank"
               rel="noreferrer"
               class="dossier-export-btn"
-              style="font-size: 12px; padding: 8px 12px; border-radius: 6px; margin-top: auto; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--text-primary); color: var(--bg-card); transition: all 0.2s ease;"
+              style="font-size: 12px; padding: 8px 12px; border-radius: 6px; margin-top: auto; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--text-primary); color: var(--bg-card); transition: all 0.2s ease; box-sizing: border-box;"
             >
               Visit Profile ↗
             </a>

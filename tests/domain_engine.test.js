@@ -7,7 +7,7 @@ const {
   detectWildcardDns,
   resolveDomainIntel,
   syncCloudflareIps
-} = require('../backend/domainEngine');
+} = require('../dist-backend/domainEngine');
 
 // Mock DNS and Axios
 jest.mock('dns', () => ({

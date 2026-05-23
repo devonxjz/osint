@@ -1,10 +1,10 @@
 'use strict';
 
-const { generateVariants, scanIdentity, scoreConfidence } = require('../backend/identityEngine');
-const { scanPlatform } = require('../backend/scanner');
+const { generateVariants, scanIdentity, scoreConfidence } = require('../dist-backend/identityEngine');
+const { scanPlatform } = require('../dist-backend/scanner');
 
 // Mock scanner module
-jest.mock('../backend/scanner');
+jest.mock('../dist-backend/scanner');
 
 describe('IdentityEngine - TDD Tests', () => {
   beforeEach(() => {

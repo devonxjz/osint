@@ -1,6 +1,6 @@
 'use strict';
 
-const { validatePhone } = require('../backend/phone/validator');
+const { validatePhone } = require('../dist-backend/phone/validator');
 
 describe('Phone Validator Module', () => {
   // Behavior 1: Sanitizes input by removing spaces, dashes, brackets

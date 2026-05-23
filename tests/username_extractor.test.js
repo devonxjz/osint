@@ -1,6 +1,6 @@
 'use strict';
 
-const { extractUsernames } = require('../backend/email/username_extractor');
+const { extractUsernames } = require('../dist-backend/email/username_extractor');
 
 describe('Username Extraction from Email', () => {
   // Behavior 1: Strips domain and returns primary username

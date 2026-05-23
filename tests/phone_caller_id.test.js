@@ -1,7 +1,7 @@
 'use strict';
 
 const axios = require('axios');
-const { lookupCallerID } = require('../backend/phone/caller_id');
+const { lookupCallerID } = require('../dist-backend/phone/caller_id');
 
 jest.mock('axios');
 

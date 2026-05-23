@@ -1,6 +1,6 @@
 'use strict';
 
-const { orchestrateEmailScan } = require('../backend/email/email_orchestrator');
+const { orchestrateEmailScan } = require('../dist-backend/email/email_orchestrator');
 
 describe('Email Scan Orchestrator', () => {
   // Behavior 1: Runs all pipelines and returns a consolidated dossier

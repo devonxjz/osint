@@ -1,6 +1,6 @@
 'use strict';
 
-const { lookupBreaches } = require('../backend/email/breach_engine');
+const { lookupBreaches } = require('../dist-backend/email/breach_engine');
 
 describe('Breach Engine', () => {
   // Behavior 1: No API key → uses mock breach database

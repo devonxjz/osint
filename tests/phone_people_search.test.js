@@ -1,7 +1,7 @@
 'use strict';
 
-const { searchPeopleData } = require('../backend/phone/people_search');
-const { getDeterministicProfile } = require('../backend/phone/caller_id');
+const { searchPeopleData } = require('../dist-backend/phone/people_search');
+const { getDeterministicProfile } = require('../dist-backend/phone/caller_id');
 
 describe('Phone People Search & Dorking Aggregator', () => {
   // Behavior 1: Unified deterministic mock profile consistency

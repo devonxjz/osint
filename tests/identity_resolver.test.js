@@ -1,6 +1,6 @@
 'use strict';
 
-const { resolveIdentity } = require('../backend/email/identity_resolver');
+const { resolveIdentity } = require('../dist-backend/email/identity_resolver');
 
 describe('Identity Resolution Engine', () => {
   // Behavior 1: Returns identity result with correct shape

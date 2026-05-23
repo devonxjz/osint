@@ -20,19 +20,24 @@
     "cytoscape": "^3.33.4",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "pdfkit": "^0.18.0"
+    "pdfkit": "^0.18.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@emnapi/core": "^1.10.0",
     "@emnapi/runtime": "^1.10.0",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@tsconfig/svelte": "^5.0.8",
+    "@types/cors": "^2.8.19",
     "@types/cytoscape": "^3.21.9",
+    "@types/express": "^5.0.6",
     "@types/node": "^24.12.3",
+    "@types/pdfkit": "^0.17.6",
     "jest": "^30.4.2",
     "nodemon": "^3.1.14",
     "svelte": "^5.55.5",
     "svelte-check": "^4.4.8",
+    "tsx": "^4.22.3",
     "typescript": "~6.0.2",
     "vite": "^8.0.12"
   }

@@ -1,7 +1,7 @@
 // api/index.js
 'use strict';
 
-const app = require('../backend/index');
+const app = require('../dist-backend/index').default;
 
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;

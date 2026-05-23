@@ -1,6 +1,6 @@
 'use strict';
 
-const { generateEmailPermutations } = require('../backend/email/permutation_engine');
+const { generateEmailPermutations } = require('../dist-backend/email/permutation_engine');
 
 describe('Email Permutation Engine', () => {
   // Behavior 1: Generates work email patterns from realName + domain

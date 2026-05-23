@@ -2,7 +2,7 @@
 
 'use strict';
 
-const { SSEStreamManager } = require('../backend/sseManager');
+const { SSEStreamManager } = require('../dist-backend/sseManager');
 
 describe('SSEStreamManager - Behavior 1: SSE Manager Basics', () => {
   let mockRes;

@@ -1,7 +1,7 @@
 'use strict';
 
-const { analyzeInput } = require('../backend/analyzer');
-const { getPlatforms } = require('../backend/registry');
+const { analyzeInput } = require('../dist-backend/analyzer');
+const { getPlatforms } = require('../dist-backend/registry');
 
 describe('MVC Pipeline Integration', () => {
   it('should sanitize input and successfully resolve matching platform configurations', () => {

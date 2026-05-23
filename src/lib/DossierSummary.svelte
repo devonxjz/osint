@@ -10,12 +10,12 @@
     scanner.targetType === 'PHONE'
       ? (scanner.phoneDossier?.validation?.carrier
           ? `${scanner.phoneDossier.validation.carrier} | ${scanner.phoneDossier.callerId?.location || 'Global'}`
-          : 'Carrier Metadata Resolved')
+          : scanner.t.carrierMetadataResolved)
       : scanner.identityResult?.employer
         ? `${scanner.identityResult.employer}`
         : Object.values(scanner.results)
             .map(r => r.data?.location)
-            .find(loc => !!loc) || 'Footprint Identified'
+            .find(loc => !!loc) || scanner.t.footprintIdentified
   );
 
   let confidenceLevel = $derived(
@@ -62,9 +62,9 @@
 {#if scanner.summary || (scanner.targetType === 'PHONE' && scanner.phoneDossier)}
   <div class="dossier-card">
     <div class="section-headline-group" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
-      <h3 class="section-title">🕵️ Intelligence Dossier</h3>
+      <h3 class="section-title">{scanner.t.intelDossier}</h3>
       <span class="status-badge" style="background: rgba(16, 185, 129, 0.1); color: var(--accent-green); font-weight: 700;">
-        Complete
+        {scanner.t.complete}
       </span>
     </div>
 
@@ -88,7 +88,7 @@
           </span>
         {/if}
         <span class="card-category-tag">
-          Type: {scanner.targetType} | {identifiedLocation}
+          {scanner.t.type}: {scanner.targetType} | {identifiedLocation}
         </span>
       </div>
     </div>
@@ -96,10 +96,10 @@
     <!-- Identity Confidence Badge -->
     <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
       <span style="font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: {confidenceLevel === 'HIGH' ? 'rgba(16,185,129,0.12)' : confidenceLevel === 'MEDIUM' ? 'rgba(99,102,241,0.12)' : 'rgba(148,163,184,0.12)'}; color: {confidenceColor};">
-        {confidenceLevel} CONFIDENCE
+        {confidenceLevel === 'HIGH' ? scanner.t.confidenceHigh : confidenceLevel === 'MEDIUM' ? scanner.t.confidenceMedium : scanner.t.confidenceLow} {scanner.t.confidence}
       </span>
       <span style="font-size: 11px; color: var(--text-secondary);">
-        Sources: {sourcesText}
+        {scanner.t.sources}: {sourcesText}
       </span>
     </div>
 
@@ -109,20 +109,20 @@
         <span class="dossier-stat-num" style="color: var(--accent-green);">
           {targetStatFoundCount}
         </span>
-        <div class="dossier-stat-lbl">{scanner.targetType === 'EMAIL' ? 'Breaches Found' : scanner.targetType === 'PHONE' ? 'OTT Accounts' : 'Active Profiles'}</div>
+        <div class="dossier-stat-lbl">{scanner.targetType === 'EMAIL' ? scanner.t.breachesFound : scanner.targetType === 'PHONE' ? scanner.t.ottAccounts : scanner.t.activeProfiles}</div>
       </div>
       <div class="dossier-stat-box">
         <span class="dossier-stat-num">
           {scanner.summary?.timeTakenMs ? parseFloat((scanner.summary.timeTakenMs / 1000).toFixed(2)) : parseFloat(((scanner.phoneDossier?.timeTakenMs || 0) / 1000).toFixed(2))}s
         </span>
-        <div class="dossier-stat-lbl">Time Elapsed</div>
+        <div class="dossier-stat-lbl">{scanner.t.timeElapsed}</div>
       </div>
       {#if scanner.targetType === 'EMAIL' && scanner.breaches.length > 0}
         <div class="dossier-stat-box">
           <span class="dossier-stat-num" style="color: var(--accent-red, #ef4444);">
             {scanner.breaches.length}
           </span>
-          <div class="dossier-stat-lbl">Breach(es)</div>
+          <div class="dossier-stat-lbl">{scanner.t.breachesCount}</div>
         </div>
       {/if}
       {#if scanner.targetType === 'EMAIL' && (scanner.emailPermutations.workEmails.length + scanner.emailPermutations.personalEmails.length > 0)}
@@ -130,7 +130,7 @@
           <span class="dossier-stat-num" style="color: var(--accent-purple);">
             {scanner.emailPermutations.workEmails.length + scanner.emailPermutations.personalEmails.length}
           </span>
-          <div class="dossier-stat-lbl">Email Variants</div>
+          <div class="dossier-stat-lbl">{scanner.t.emailVariants}</div>
         </div>
       {/if}
     </div>
@@ -138,7 +138,7 @@
     <!-- Email Permutations (if any) -->
     {#if scanner.targetType === 'EMAIL' && (scanner.emailPermutations.workEmails.length > 0 || scanner.emailPermutations.personalEmails.length > 0)}
       <div style="margin-top: 12px; padding: 10px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
-        <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;">Related Email Addresses</div>
+        <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em;">{scanner.t.relatedEmails}</div>
         <div style="display: flex; flex-wrap: wrap; gap: 4px;">
           {#each scanner.emailPermutations.workEmails as email}
             <span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(99,102,241,0.1); color: var(--accent-blue);">{email}</span>
@@ -156,7 +156,7 @@
       class="dossier-export-btn"
       onclick={() => scanner.downloadDossier()}
     >
-      📄 Export Classified Dossier PDF
+      {scanner.t.exportPdf}
     </button>
   </div>
 {/if}

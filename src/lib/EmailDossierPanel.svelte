@@ -24,26 +24,26 @@
     <div class="glass-panel main-header-panel">
       <div class="status-indicator">
         <span class="pulse-dot" class:active={scanner.isScanning}></span>
-        <span class="status-text">{scanner.isScanning ? 'Intel Gathering...' : 'Intel Complete'}</span>
+        <span class="status-text">{scanner.isScanning ? scanner.t.intelGathering : scanner.t.intelComplete}</span>
       </div>
       <h2 class="target-title-display">
         📧 {scanner.target.trim()}
       </h2>
       <div class="metadata-grid">
         <div class="meta-item">
-          <span class="meta-label">Domain Registry</span>
-          <span class="meta-value domain-pill">{scanner.target.split('@')[1] || 'Analyzing...'}</span>
+          <span class="meta-label">{scanner.t.domainRegistry}</span>
+          <span class="meta-value domain-pill">{scanner.target.split('@')[1] || scanner.t.analyzing}</span>
         </div>
         <div class="meta-item">
-          <span class="meta-label">Gravatar Sync</span>
+          <span class="meta-label">{scanner.t.gravatarSync}</span>
           <span class="meta-value" style="color: {hasGravatar ? 'var(--accent-green)' : 'var(--text-secondary)'}">
-            {hasGravatar ? '✓ Profile Synced' : 'No Profile Match'}
+            {hasGravatar ? '✓ Profile Synced' : scanner.t.noIdentityFootprint}
           </span>
         </div>
         <div class="meta-item">
-          <span class="meta-label">Database Compromises</span>
+          <span class="meta-label">{scanner.t.dbCompromises}</span>
           <span class="meta-value" style="color: {breaches.length > 0 ? 'var(--accent-red)' : 'var(--accent-green)'}">
-            {breaches.length > 0 ? `⚠️ ${breaches.length} Breach(es)` : '✓ Clean Status'}
+            {breaches.length > 0 ? `⚠️ ${breaches.length} Breach(es)` : scanner.t.cleanStatus}
           </span>
         </div>
       </div>
@@ -52,7 +52,7 @@
     <!-- SECTION 2: Identity Resolution & Employer Details -->
     {#if identity && (identity.realName || scanner.isScanning)}
       <div class="glass-panel identity-resolution-panel transition-fade">
-        <h3 class="panel-section-title">👤 Reverse Identity Resolution</h3>
+        <h3 class="panel-section-title">{scanner.t.reverseIdentityResolution}</h3>
         {#if identity.realName}
           <div class="identity-info-grid">
             <div class="identity-card-badge">
@@ -66,19 +66,19 @@
                 {#if identity.employer || identity.position}
                   <span class="id-loc">💼 {identity.position || 'Employee'} at {identity.employer || 'Unknown Employer'}</span>
                 {:else}
-                  <span class="id-loc">📍 Public Footprint Match</span>
+                  <span class="id-loc">{scanner.t.publicFootprintMatch}</span>
                 {/if}
               </div>
             </div>
             <div class="details-list">
               <div class="detail-row">
-                <span class="row-lbl">Confidence Level:</span>
+                <span class="row-lbl">{scanner.t.confidence}:</span>
                 <span class="row-val" style="color: {identity.confidence === 'HIGH' ? 'var(--accent-green)' : 'var(--accent-blue)'}; font-weight: 700;">
-                  {identity.confidence || 'LOW'}
+                  {identity.confidence === 'HIGH' ? scanner.t.confidenceHigh : identity.confidence === 'MEDIUM' ? scanner.t.confidenceMedium : scanner.t.confidenceLow}
                 </span>
               </div>
               <div class="detail-row">
-                <span class="row-lbl">Intel Sources:</span>
+                <span class="row-lbl">{scanner.t.sources}:</span>
                 <span class="row-val font-mono">{(identity.sources || ['Gravatar Sync', 'Public Leaks']).join(', ')}</span>
               </div>
             </div>
@@ -86,10 +86,10 @@
         {:else if scanner.isScanning}
           <div class="loading-placeholder">
             <div class="spinner-small"></div>
-            <span>Interrogating Identity Directories...</span>
+            <span>{scanner.t.interrogatingIdentityDirs}</span>
           </div>
         {:else}
-          <span class="no-results-msg">No structured identity footprints resolved for this target.</span>
+          <span class="no-results-msg">{scanner.t.noIdentityFootprint}</span>
         {/if}
       </div>
     {/if}
@@ -97,23 +97,23 @@
     <!-- SECTION 3: Deep Permutation Variants (Interactive) -->
     {#if permutations && (permutations.workEmails.length > 0 || permutations.personalEmails.length > 0)}
       <div class="glass-panel permutation-panel transition-fade">
-        <h3 class="panel-section-title">🔄 Multi-Platform Identity Permutations</h3>
+        <h3 class="panel-section-title">{scanner.t.multiPlatformPermutations}</h3>
         <p class="panel-section-subtitle">
-          Derived email combinations based on name structure and workspace registry, ideal for physical correlation analysis. Click any variant to copy to clipboard.
+          {scanner.t.multiPlatformPermutationsSubtitle}
         </p>
 
         {#if permutations.workEmails.length > 0}
           <div class="permutation-group">
-            <span class="permutation-group-title">Corporate & Workspace Targets</span>
+            <span class="permutation-group-title">{scanner.t.corporateWorkspaceTargets}</span>
             <div class="variant-chips-container">
               {#each permutations.workEmails as email}
                 <button
                   type="button"
                   class="variant-chip work"
                   onclick={() => copyToClipboard(email)}
-                  title="Click to copy corporate variant"
+                  title={scanner.t.clickToCopyWork}
                 >
-                  <span class="variant-tag">WORK</span>
+                  <span class="variant-tag">{scanner.t.work}</span>
                   <span class="variant-email">{email}</span>
                 </button>
               {/each}
@@ -123,16 +123,16 @@
 
         {#if permutations.personalEmails.length > 0}
           <div class="permutation-group" style="margin-top: 16px;">
-            <span class="permutation-group-title">Personal Web Targets</span>
+            <span class="permutation-group-title">{scanner.t.personalWebTargets}</span>
             <div class="variant-chips-container">
               {#each permutations.personalEmails as email}
                 <button
                   type="button"
                   class="variant-chip personal"
                   onclick={() => copyToClipboard(email)}
-                  title="Click to copy personal variant"
+                  title={scanner.t.clickToCopyPersonal}
                 >
-                  <span class="variant-tag">PERS</span>
+                  <span class="variant-tag">{scanner.t.personal}</span>
                   <span class="variant-email">{email}</span>
                 </button>
               {/each}

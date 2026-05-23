@@ -32,7 +32,7 @@
 <div class="search-card">
   {#if scanner.targetType === 'USERNAME' || scanner.targetType === null || !scanner.target.trim()}
     <div class="category-filter-row">
-      <span class="filter-label">Target Investigation Types</span>
+      <span class="filter-label">{scanner.t.targetInvestTypes}</span>
       <div class="chips-container">
         {#each categoriesList as category}
           <button
@@ -70,7 +70,7 @@
     <input
       type="text"
       class="search-input"
-      placeholder="Enter target username, email address, phone number (+84...), or domain name"
+      placeholder={scanner.t.placeholderInput}
       disabled={scanner.isScanning}
       bind:value={scanner.target}
       onkeydown={handleKeyDown}
@@ -82,7 +82,7 @@
         class="scan-cancel-btn"
         onclick={() => scanner.cancelScan()}
       >
-        Cancel
+        {scanner.t.cancel}
       </button>
     {:else}
       <button
@@ -91,7 +91,7 @@
         disabled={!scanner.target.trim() || (scanner.targetType === 'USERNAME' && scanner.categories.length === 0)}
         onclick={() => scanner.startScan()}
       >
-        Scan
+        {scanner.t.scan}
       </button>
     {/if}
   </div>
@@ -99,11 +99,11 @@
   {#if scanner.targetType === 'REAL_NAME' || scanner.targetType === 'DOMAIN'}
     <div class="deep-scan-row">
       <div style="display: flex; align-items: center; gap: 8px;">
-        <span class="deep-scan-label">🔬 Deep Scan Active</span>
+        <span class="deep-scan-label">{scanner.t.deepScanActive}</span>
         <span class="deep-scan-hint">
           {scanner.targetType === 'REAL_NAME' 
-            ? '• Scans all name permutations (Extended Search)' 
-            : '• Performs certificate logs check & wildcard IP bypassing'}
+            ? scanner.t.deepScanRealNameHint 
+            : scanner.t.deepScanDomainHint}
         </span>
       </div>
       <label class="switch">

@@ -20,22 +20,38 @@
   <header class="navbar">
     <div class="logo-section">
       <div class="logo-badge">Ω</div>
-      <h1 class="logo-title">Antigravity OSINT Intelligence Suite</h1>
+      <h1 class="logo-title">{scanner.t.appTitle}</h1>
     </div>
     
-    <!-- Light/Dark Mode Switcher -->
-    <button
-      type="button"
-      class="theme-btn"
-      onclick={() => scanner.toggleTheme()}
-      aria-label="Toggle visual theme mode"
-    >
-      {#if scanner.theme === 'dark'}
-        ☀️
-      {:else}
-        🌙
-      {/if}
-    </button>
+    <div class="nav-controls">
+      <!-- Language Switcher -->
+      <button
+        type="button"
+        class="lang-btn"
+        onclick={() => scanner.toggleLanguage()}
+        aria-label={scanner.t.toggleLang}
+      >
+        {#if scanner.language === 'vi'}
+          🇻🇳 VI
+        {:else}
+          🇬🇧 EN
+        {/if}
+      </button>
+
+      <!-- Light/Dark Mode Switcher -->
+      <button
+        type="button"
+        class="theme-btn"
+        onclick={() => scanner.toggleTheme()}
+        aria-label={scanner.t.toggleTheme}
+      >
+        {#if scanner.theme === 'dark'}
+          ☀️
+        {:else}
+          🌙
+        {/if}
+      </button>
+    </div>
   </header>
 
   <!-- Module 7.1: SearchBar Component -->
@@ -45,12 +61,12 @@
   {#if scanner.isScanning || (scanner.progress.completed > 0 && scanner.progress.completed < scanner.progress.total)}
     <div class="progress-card">
       <div class="progress-info">
-        <span style="color: var(--text-primary);">Scanning target digital profiles...</span>
+        <span style="color: var(--text-primary);">{scanner.t.scanningTarget}</span>
         <span style="color: var(--accent-blue);">
           {#if scanner.etaSeconds !== null}
-            <span style="margin-right: 8px; color: var(--accent-purple);">ETA: {scanner.etaSeconds}s |</span>
+            <span style="margin-right: 8px; color: var(--accent-purple);">{scanner.t.eta}: {scanner.etaSeconds}s |</span>
           {/if}
-          {scanner.progress.completed} / {scanner.progress.total} platforms ({scanner.progress.percentage}%)
+          {scanner.progress.completed} / {scanner.progress.total} {scanner.t.platforms} ({scanner.progress.percentage}%)
         </span>
       </div>
       <div class="progress-bar-bg">

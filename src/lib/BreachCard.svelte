@@ -10,10 +10,10 @@
   <div class="breaches-section">
     <div class="section-headline-group">
       <h3 class="section-title" style="color: var(--accent-red);">
-        ⚠️ Compromised Database Incidents ({scanner.breaches.length})
+        {scanner.t.compromisedDbIncidents} ({scanner.breaches.length})
       </h3>
       <span class="status-badge" style="background: rgba(239, 68, 68, 0.1); color: var(--accent-red); font-weight: 700;">
-        Critical Threats
+        {scanner.t.criticalThreats}
       </span>
     </div>
 

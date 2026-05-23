@@ -2,6 +2,9 @@
 
 'use strict';
 
+import { translations } from './translations';
+
+
 // --- Types ---
 export type CardStatus = 'PENDING' | 'SCANNING' | 'FOUND' | 'NOT_FOUND';
 
@@ -107,6 +110,12 @@ export class ScannerState {
   // Global Theme Toggling State ('light' | 'dark')
   theme = $state<'light' | 'dark'>('dark');
 
+  // Global Language State ('vi' | 'en')
+  language = $state<'vi' | 'en'>('vi');
+
+  // Reactively derived translation dictionary based on current language
+  t = $derived(translations[this.language]);
+
   // Performance Buffering for Svelte UI 60FPS lock
   private progressBuffer: { completed: number; total: number; percentage: number } | null = null;
   private resultBuffer: ScanResult[] = [];
@@ -128,10 +137,10 @@ export class ScannerState {
     const remaining = this.progress.total - this.progress.completed;
     return speed > 0 ? Math.ceil(remaining / speed) : null;
   });
-
   constructor(private apiBase: string = 'http://localhost:3000') {
     // Automatically apply theme on init
     this.applyTheme();
+    this.loadLanguage();
     this.initializeData();
   }
 
@@ -209,12 +218,35 @@ export class ScannerState {
     }
   }
 
-  // --- Theme Controls ---
+  // --- Theme & Language Controls ---
   toggleTheme() {
     this.theme = this.theme === 'light' ? 'dark' : 'light';
     this.applyTheme();
   }
 
+  loadLanguage() {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('osint_language');
+        if (stored === 'en' || stored === 'vi') {
+          this.language = stored;
+        }
+      } catch (err) {
+        console.error('Failed to load language from LocalStorage:', err);
+      }
+    }
+  }
+
+  toggleLanguage() {
+    this.language = this.language === 'en' ? 'vi' : 'en';
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('osint_language', this.language);
+      } catch (err) {
+        console.error('Failed to save language to LocalStorage:', err);
+      }
+    }
+  }
   private applyTheme() {
     if (typeof document !== 'undefined') {
       const root = document.documentElement;
@@ -758,6 +790,27 @@ export class ScannerState {
     this.logs.push('[+] Establishing SSE stream for domain resolution...');
     
     this.progress = { completed: 0, total: 100, percentage: 0 };
+
+    // Progressive Obsidian Graph: Initialize the graph shell immediately so it renders in real-time
+    this.domainDossier = {
+      domain: this.target.trim(),
+      whois: null,
+      subdomains: [],
+      certificates: [],
+      wildcardDetected: false,
+      graph: {
+        nodes: [
+          {
+            id: `dom-${this.target.trim()}`,
+            label: this.target.trim(),
+            type: 'Domain',
+            group: 'domain',
+            properties: { source: 'target-input' }
+          }
+        ],
+        edges: []
+      }
+    };
     
     try {
       this.eventSource = new EventSource(url);
@@ -775,6 +828,98 @@ export class ScannerState {
         } else {
           this.resultBuffer.push(parsed);
           this.logs.push(`[✓] SUBDOMAIN: ${parsed.subdomain} -> ${parsed.ip} (Cloudflare: ${parsed.isCloudflare ? 'Yes' : 'No'})`);
+
+          // Progressively push nodes and edges to the active graph
+          if (this.domainDossier && this.domainDossier.graph) {
+            const domainNodeId = `dom-${this.domainDossier.domain}`;
+            const subNodeId = `sub-${parsed.subdomain}`;
+            const ipNodeId = `ip-${parsed.ip}`;
+
+            // Add subdomain node if unique
+            if (!this.domainDossier.graph.nodes.some((n: any) => n.id === subNodeId)) {
+              this.domainDossier.graph.nodes.push({
+                id: subNodeId,
+                label: parsed.subdomain,
+                type: 'Subdomain',
+                group: 'subdomain',
+                properties: { source: 'crt.sh' }
+              });
+            }
+
+            // Link domain node to subdomain
+            if (!this.domainDossier.graph.edges.some((edge: any) => edge.source === domainNodeId && edge.target === subNodeId)) {
+              this.domainDossier.graph.edges.push({
+                source: domainNodeId,
+                target: subNodeId,
+                relation: 'HAS_SUBDOMAIN'
+              });
+            }
+
+            // If IP resolves, map IP node and resolve relation
+            if (parsed.ip) {
+              const shodanOrg = parsed.shodan?.org || '';
+              const shodanIsp = parsed.shodan?.isp || '';
+              const shodanOs = parsed.shodan?.os || '';
+              const shodanLoc = parsed.shodan ? `${parsed.shodan.city}, ${parsed.shodan.country}` : '';
+              const shodanPorts = parsed.shodan?.ports?.join(', ') || '';
+
+              if (!this.domainDossier.graph.nodes.some((n: any) => n.id === ipNodeId)) {
+                this.domainDossier.graph.nodes.push({
+                  id: ipNodeId,
+                  label: parsed.ip,
+                  type: 'IP',
+                  group: 'infrastructure',
+                  properties: {
+                    source: 'dns-resolution',
+                    isCloudflare: parsed.isCloudflare,
+                    shodan_org: shodanOrg,
+                    shodan_isp: shodanIsp,
+                    shodan_os: shodanOs,
+                    shodan_location: shodanLoc,
+                    shodan_ports: shodanPorts
+                  }
+                });
+              }
+
+              if (!this.domainDossier.graph.edges.some((edge: any) => edge.source === subNodeId && edge.target === ipNodeId)) {
+                this.domainDossier.graph.edges.push({
+                  source: subNodeId,
+                  target: ipNodeId,
+                  relation: 'RESOLVES_TO'
+                });
+              }
+
+              // Add Port nodes from Shodan progressive update
+              if (parsed.shodan && Array.isArray(parsed.shodan.ports)) {
+                parsed.shodan.ports.forEach((port: number) => {
+                  const portNodeId = `port-${parsed.ip}-${port}`;
+                  if (!this.domainDossier.graph.nodes.some((n: any) => n.id === portNodeId)) {
+                    this.domainDossier.graph.nodes.push({
+                      id: portNodeId,
+                      label: `Port ${port}`,
+                      type: 'Port',
+                      group: 'infrastructure',
+                      properties: {
+                        source: 'shodan-intel',
+                        portNumber: port
+                      }
+                    });
+                  }
+
+                  if (!this.domainDossier.graph.edges.some((edge: any) => edge.source === ipNodeId && edge.target === portNodeId)) {
+                    this.domainDossier.graph.edges.push({
+                      source: ipNodeId,
+                      target: portNodeId,
+                      relation: 'HAS_PORT'
+                    });
+                  }
+                });
+              }
+            }
+
+            // Force deep clone to notify Svelte 5 reactive runes
+            this.domainDossier = { ...this.domainDossier };
+          }
         }
       });
       

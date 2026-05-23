@@ -19,24 +19,24 @@
     <div class="glass-panel main-header-panel">
       <div class="status-indicator">
         <span class="pulse-dot" class:active={scanner.isScanning}></span>
-        <span class="status-text">{scanner.isScanning ? 'Scan in progress...' : 'Scan Complete'}</span>
+        <span class="status-text">{scanner.isScanning ? scanner.t.scanInProgress : scanner.t.scanComplete}</span>
       </div>
       <h2 class="target-title-display">
         📞 {val?.formatted || dossier.phone}
       </h2>
       <div class="metadata-grid">
         <div class="meta-item">
-          <span class="meta-label">Carrier Network</span>
-          <span class="meta-value carrier-pill">{val?.carrier || 'Analyzing...'}</span>
+          <span class="meta-label">{scanner.t.carrierNetwork}</span>
+          <span class="meta-value carrier-pill">{val?.carrier || scanner.t.analyzing}</span>
         </div>
         <div class="meta-item">
-          <span class="meta-label">Country Code</span>
-          <span class="meta-value">{val?.countryCode || 'Resolving...'}</span>
+          <span class="meta-label">{scanner.t.countryCode}</span>
+          <span class="meta-value">{val?.countryCode || scanner.t.resolving}</span>
         </div>
         <div class="meta-item">
-          <span class="meta-label">Registry Valid</span>
+          <span class="meta-label">{scanner.t.registryValid}</span>
           <span class="meta-value" style="color: {val?.valid ? 'var(--accent-green)' : 'var(--text-secondary)'}">
-            {val?.valid ? '✓ E.164 Verified' : 'Checking...'}
+            {val?.valid ? scanner.t.verifiedE164 : scanner.t.checking}
           </span>
         </div>
       </div>
@@ -45,31 +45,31 @@
     <!-- SECTION 2: Reverse Caller ID (Progressive disclosure) -->
     {#if caller && (caller.realName || scanner.isScanning)}
       <div class="glass-panel caller-identity-panel transition-fade">
-        <h3 class="panel-section-title">👤 Reverse Caller Identification</h3>
+        <h3 class="panel-section-title">{scanner.t.reverseCallerId}</h3>
         {#if caller.realName}
           <div class="identity-info-grid">
             <div class="identity-card-badge">
               <div class="avatar-stub">{caller.realName.slice(0, 2).toUpperCase()}</div>
               <div class="badge-text-group">
                 <span class="id-name">{caller.realName}</span>
-                <span class="id-loc">📍 {caller.location || 'Unknown location'}</span>
+                <span class="id-loc">📍 {caller.location || scanner.t.unknownLocation}</span>
               </div>
             </div>
             <div class="details-list">
               <div class="detail-row">
-                <span class="row-lbl">Confidence Rate:</span>
-                <span class="row-val confidence-high">HIGH</span>
+                <span class="row-lbl">{scanner.t.confidenceRate}:</span>
+                <span class="row-val confidence-high">{scanner.t.confidenceHigh}</span>
               </div>
               <div class="detail-row">
-                <span class="row-lbl">Resolution Sources:</span>
-                <span class="row-val font-mono">{(caller.sources || []).join(', ') || 'None'}</span>
+                <span class="row-lbl">{scanner.t.resolutionSources}:</span>
+                <span class="row-val font-mono">{(caller.sources || []).join(', ') || scanner.t.none}</span>
               </div>
             </div>
           </div>
         {:else}
           <div class="loading-placeholder">
             <div class="spinner-small"></div>
-            <span>Interrogating Caller Directories...</span>
+            <span>{scanner.t.interrogatingCallerDirs}</span>
           </div>
         {/if}
       </div>
@@ -78,7 +78,7 @@
     <!-- SECTION 3: Simulated OTT Profiles & Facebook Discovery -->
     {#if social && ((social.ottProfiles && social.ottProfiles.length > 0) || social.facebook?.profileUrl || scanner.isScanning)}
       <div class="glass-panel social-profiles-panel transition-fade">
-        <h3 class="panel-section-title">🌐 Social Media & Mobile OTT Sync</h3>
+        <h3 class="panel-section-title">{scanner.t.socialOttSync}</h3>
         
         <!-- OTT Platforms Grid -->
         <div class="ott-grid">
@@ -102,10 +102,10 @@
           {:else if scanner.isScanning}
             <div class="loading-placeholder">
               <div class="spinner-small"></div>
-              <span>Simulating Mobile Contact Sync...</span>
+              <span>{scanner.t.simulatingContactSync}</span>
             </div>
           {:else}
-            <span class="no-results-msg">No active OTT messenger profiles discovered.</span>
+            <span class="no-results-msg">{scanner.t.noOttMessenger}</span>
           {/if}
         </div>
 
@@ -114,11 +114,11 @@
           <div class="facebook-match-banner">
             <div class="fb-icon">f</div>
             <div class="fb-details">
-              <span class="fb-title">Facebook Profile Trace Match</span>
-              <span class="fb-candidate">Candidate: <strong>{social.facebook.candidateName}</strong></span>
-              <span class="fb-fanpage">Matched in Page: <em>{social.facebook.pageName}</em></span>
+              <span class="fb-title">{scanner.t.fbMatchBanner}</span>
+              <span class="fb-candidate">{scanner.t.fbCandidate}: <strong>{social.facebook.candidateName}</strong></span>
+              <span class="fb-fanpage">{scanner.t.fbFanpage}: <em>{social.facebook.pageName}</em></span>
               <a href={social.facebook.profileUrl} target="_blank" rel="noopener noreferrer" class="fb-visit-btn">
-                Visit Profile ↗
+                {scanner.t.visitProfileBtn}
               </a>
             </div>
           </div>
@@ -129,14 +129,14 @@
     <!-- SECTION 4: Google Dorking Links Panel (Progressive disclosure) -->
     {#if people && (people.dorkUrls && people.dorkUrls.length > 0)}
       <div class="glass-panel dork-links-panel transition-fade">
-        <h3 class="panel-section-title">🔍 Google Dorking Footprints</h3>
+        <h3 class="panel-section-title">{scanner.t.googleDorking}</h3>
         <p class="panel-section-subtitle">
-          Target-specific deep dorking aggregates compiled from verified name records, locations, and affiliations. (Omitted from formal PDF Dossiers)
+          {scanner.t.googleDorkingSubtitle}
         </p>
 
         <div class="dork-badge-grid">
           {#each people.dorkUrls as dorkUrl, i}
-            {@const label = i === 0 ? 'Public Directory Search' : i === 1 ? 'Social Media Mentions' : i === 2 ? 'Employer & Affiliations' : 'Alternative Names Search'}
+            {@const label = i === 0 ? scanner.t.dorkDirs : i === 1 ? scanner.t.dorkSocial : i === 2 ? scanner.t.dorkEmployer : scanner.t.dorkAltNames}
             <a
               href={dorkUrl}
               target="_blank"
@@ -148,7 +148,7 @@
                 <span class="dork-icon">↗</span>
               </div>
               <span class="dork-badge-label">{label}</span>
-              <span class="dork-badge-description">Compile targeted query on Google for deep web intelligence footprinting.</span>
+              <span class="dork-badge-description">{scanner.t.dorkDescription}</span>
             </a>
           {/each}
         </div>

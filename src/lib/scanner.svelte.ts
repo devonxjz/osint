@@ -2,6 +2,9 @@
 
 'use strict';
 
+import { translations } from './translations';
+
+
 // --- Types ---
 export type CardStatus = 'PENDING' | 'SCANNING' | 'FOUND' | 'NOT_FOUND';
 
@@ -29,6 +32,35 @@ export interface EmailScanResult {
   breachesCount: number;
   hasGravatar: boolean;
   avatarUrl: string | null;
+}
+
+export interface IdentityResult {
+  realName: string | null;
+  employer: string | null;
+  position: string | null;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW';
+  sources: string[];
+}
+
+export interface EmailDossier {
+  email: string;
+  validation: { syntaxValid: boolean; domainExists?: boolean | null; isDisposable?: boolean };
+  breaches: Breach[];
+  gravatar: { hasGravatar: boolean; avatarUrl: string | null; displayName?: string | null };
+  identity: IdentityResult;
+  usernames: { primary: string; variants: string[] };
+  permutations: { workEmails: string[]; personalEmails: string[] };
+  timeTakenMs: number;
+  platformResults?: ScanResult[];
+}
+
+export interface PhoneDossier {
+  phone: string;
+  validation: { valid: boolean; formatted: string; countryCode: string; carrier: string };
+  callerId?: { realName: string; location: string; carrier: string; sources: string[] };
+  peopleSearch?: { name: string; realAddress: string; relatives: string[]; business: string; dorkUrls: string[] };
+  socialSync?: { facebook: { profileUrl: string; pageName: string; candidateName: string }; ottProfiles: { app: string; username: string; displayName: string; avatarUrl: string }[] };
+  timeTakenMs?: number;
 }
 
 export interface ScanSummary {
@@ -61,9 +93,28 @@ export class ScannerState {
   breaches = $state<Breach[]>([]);
   hasGravatar = $state(false);
   avatarUrl = $state<string | null>(null);
+  emailDossier = $state<EmailDossier | null>(null);
+  identityResult = $state<IdentityResult | null>(null);
+  emailPermutations = $state<{ workEmails: string[]; personalEmails: string[] }>({ workEmails: [], personalEmails: [] });
+
+  // Telephone-specific States
+  phoneDossier = $state<PhoneDossier | null>(null);
+
+  // Identity/Name-specific States
+  identityDossier = $state<any>(null);
+  deepScanEnabled = $state(false);
+
+  // Domain-specific States
+  domainDossier = $state<any>(null);
 
   // Global Theme Toggling State ('light' | 'dark')
   theme = $state<'light' | 'dark'>('dark');
+
+  // Global Language State ('vi' | 'en')
+  language = $state<'vi' | 'en'>('vi');
+
+  // Reactively derived translation dictionary based on current language
+  t = $derived(translations[this.language]);
 
   // Performance Buffering for Svelte UI 60FPS lock
   private progressBuffer: { completed: number; total: number; percentage: number } | null = null;
@@ -86,10 +137,10 @@ export class ScannerState {
     const remaining = this.progress.total - this.progress.completed;
     return speed > 0 ? Math.ceil(remaining / speed) : null;
   });
-
   constructor(private apiBase: string = 'http://localhost:3000') {
     // Automatically apply theme on init
     this.applyTheme();
+    this.loadLanguage();
     this.initializeData();
   }
 
@@ -167,12 +218,35 @@ export class ScannerState {
     }
   }
 
-  // --- Theme Controls ---
+  // --- Theme & Language Controls ---
   toggleTheme() {
     this.theme = this.theme === 'light' ? 'dark' : 'light';
     this.applyTheme();
   }
 
+  loadLanguage() {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('osint_language');
+        if (stored === 'en' || stored === 'vi') {
+          this.language = stored;
+        }
+      } catch (err) {
+        console.error('Failed to load language from LocalStorage:', err);
+      }
+    }
+  }
+
+  toggleLanguage() {
+    this.language = this.language === 'en' ? 'vi' : 'en';
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('osint_language', this.language);
+      } catch (err) {
+        console.error('Failed to save language to LocalStorage:', err);
+      }
+    }
+  }
   private applyTheme() {
     if (typeof document !== 'undefined') {
       const root = document.documentElement;
@@ -269,6 +343,12 @@ export class ScannerState {
     this.breaches = [];
     this.hasGravatar = false;
     this.avatarUrl = null;
+    this.emailDossier = null;
+    this.identityResult = null;
+    this.emailPermutations = { workEmails: [], personalEmails: [] };
+    this.phoneDossier = null;
+    this.identityDossier = null;
+    this.domainDossier = null;
 
     // Initialize frame-buffers
     this.progressBuffer = null;
@@ -278,6 +358,160 @@ export class ScannerState {
     // Start RAF Update loop
     this.startUpdateLoop();
 
+    // Route to appropriate endpoint based on input type
+    if (this.targetType === 'EMAIL') {
+      this.startEmailScan();
+    } else if (this.targetType === 'PHONE') {
+      this.startPhoneScan();
+    } else if (this.targetType === 'REAL_NAME') {
+      this.startRealNameScan();
+    } else if (this.targetType === 'DOMAIN') {
+      this.startDomainScan();
+    } else {
+      this.startUsernameScan();
+    }
+  }
+
+  // ─── Email OSINT Pipeline ───
+  private startEmailScan() {
+    const queryParams = new URLSearchParams({ target: this.target.trim() });
+    const url = `${this.apiBase}/api/scan-email?${queryParams.toString()}`;
+
+    this.logs.push('[+] Routing to Email OSINT pipeline...');
+    this.logs.push('[+] Establishing SSE stream for email intelligence...');
+
+    // Set progress for email modules (6 modules total)
+    this.progress = { completed: 0, total: 6, percentage: 0 };
+
+    try {
+      this.eventSource = new EventSource(url);
+
+      this.eventSource.addEventListener('result', (e: MessageEvent) => {
+        this.handleEmailEvent(JSON.parse(e.data));
+      });
+
+      this.eventSource.addEventListener('end', (e: MessageEvent) => {
+        const parsed = JSON.parse(e.data);
+        this.handleEmailEnd(parsed.dossier);
+      });
+
+      this.eventSource.addEventListener('error', (e: Event) => {
+        if (this.isScanning) {
+          this.handleError('Email SSE stream connection error.');
+        }
+      });
+    } catch (err: any) {
+      this.handleError(err.message || 'Failed to initiate email SSE connection.');
+    }
+  }
+
+  // ─── Telephone OSINT Pipeline ───
+  private startPhoneScan() {
+    const queryParams = new URLSearchParams({ target: this.target.trim() });
+    const url = `${this.apiBase}/api/scan-phone?${queryParams.toString()}`;
+
+    this.logs.push('[+] Routing to Telephone OSINT pipeline...');
+    this.logs.push('[+] Establishing SSE stream for real-time phone intelligence...');
+
+    // Initialize clean dossier shell
+    this.phoneDossier = {
+      phone: this.target.trim(),
+      validation: { valid: false, formatted: '', countryCode: '', carrier: '' },
+      callerId: { realName: '', location: '', carrier: '', sources: [] },
+      peopleSearch: { name: '', realAddress: '', relatives: [], business: '', dorkUrls: [] },
+      socialSync: { facebook: { profileUrl: '', pageName: '', candidateName: '' }, ottProfiles: [] }
+    };
+
+    // Set progress stages (5 operations total)
+    this.progress = { completed: 0, total: 5, percentage: 0 };
+
+    try {
+      this.eventSource = new EventSource(url);
+
+      this.eventSource.addEventListener('result', (e: MessageEvent) => {
+        this.handlePhoneEvent(JSON.parse(e.data));
+      });
+
+      this.eventSource.addEventListener('end', (e: MessageEvent) => {
+        const parsed = JSON.parse(e.data);
+        this.handlePhoneEnd(parsed.dossier);
+      });
+
+      this.eventSource.addEventListener('error', (e: Event) => {
+        if (this.isScanning) {
+          this.handleError('Telephone SSE stream connection error.');
+        }
+      });
+    } catch (err: any) {
+      this.handleError(err.message || 'Failed to initiate telephone SSE connection.');
+    }
+  }
+
+  private handlePhoneEvent(event: { module: string; status: string; data: any }) {
+    const { module, status, data } = event;
+
+    this.progress = {
+      completed: this.progress.completed + 1,
+      total: 5,
+      percentage: parseFloat((((this.progress.completed + 1) / 5) * 100).toFixed(1)),
+    };
+
+    if (!this.phoneDossier) return;
+
+    switch (module) {
+      case 'validation':
+        this.phoneDossier.validation = data;
+        this.logs.push(`[+] Validation: Carrier="${data.carrier}", Format="${data.formatted}"`);
+        break;
+      case 'caller_id':
+        this.phoneDossier.callerId = data;
+        if (data.realName) {
+          this.logs.push(`[✓] Caller ID: Resolved real name "${data.realName}" (${data.location})`);
+        } else {
+          this.logs.push('[ ] Caller ID: No caller profile resolved');
+        }
+        break;
+      case 'facebook':
+        this.phoneDossier.socialSync = this.phoneDossier.socialSync || { facebook: { profileUrl: '', pageName: '', candidateName: '' }, ottProfiles: [] };
+        this.phoneDossier.socialSync.facebook = data;
+        if (data.profileUrl) {
+          this.logs.push(`[✓] Facebook Discovery: Candidate found on profile: ${data.profileUrl}`);
+        } else {
+          this.logs.push('[ ] Facebook Discovery: No matches in simulated posts/pages');
+        }
+        break;
+      case 'contact_sync':
+        this.phoneDossier.socialSync = this.phoneDossier.socialSync || { facebook: { profileUrl: '', pageName: '', candidateName: '' }, ottProfiles: [] };
+        this.phoneDossier.socialSync.ottProfiles = data.profiles || [];
+        this.logs.push(`[✓] OTT Sync Simulation: Detected ${data.profiles?.length || 0} active OTT platform profile(s)`);
+        break;
+      case 'people_search':
+        this.phoneDossier.peopleSearch = data;
+        if (data.name) {
+          this.logs.push(`[✓] People Search: Found address "${data.realAddress}" and compiled ${data.dorkUrls?.length || 0} Google Dorking queries`);
+        } else {
+          this.logs.push('[ ] People Search: No records resolved');
+        }
+        break;
+    }
+  }
+
+  private handlePhoneEnd(dossier: PhoneDossier) {
+    this.phoneDossier = dossier;
+    this.summary = { foundCount: dossier.socialSync?.ottProfiles?.length || 0, timeTakenMs: dossier.timeTakenMs || 0 };
+    this.isScanning = false;
+    this.flushBuffers();
+
+    this.logs.push(`[✓] Telephone OSINT completed in ${dossier.timeTakenMs || 0}ms.`);
+
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+    }
+  }
+
+  // ─── Username Platform Scan Pipeline ───
+  private startUsernameScan() {
     const queryParams = new URLSearchParams({
       target: this.target.trim(),
       categories: this.categories.join(','),
@@ -291,7 +525,6 @@ export class ScannerState {
     try {
       this.eventSource = new EventSource(url);
 
-      // SSE event mapping to private handlers
       this.eventSource.addEventListener('progress', (e: MessageEvent) => {
         this.handleProgress(JSON.parse(e.data));
       });
@@ -305,7 +538,6 @@ export class ScannerState {
       });
 
       this.eventSource.addEventListener('error', (e: Event) => {
-        // SSE sometimes fires generic errors on disconnect/end, only show if we are scanning
         if (this.isScanning) {
           this.handleError('SSE Stream encountered a connection error.');
         }
@@ -370,27 +602,352 @@ export class ScannerState {
       this.eventSource.close();
       this.eventSource = null;
     }
+  }
 
-    // Check if target was email to populate mock breach alert list for demo/PRD specifications
-    if (this.targetType === 'EMAIL') {
-      this.mockEmailBreachData();
+  // ─── Email-specific SSE Event Handlers ───
+  private handleEmailEvent(event: { module: string; status: string; data: any }) {
+    const { module, status, data } = event;
+
+    this.progress = {
+      completed: this.progress.completed + 1,
+      total: 6,
+      percentage: parseFloat((((this.progress.completed + 1) / 6) * 100).toFixed(1)),
+    };
+
+    switch (module) {
+      case 'validation':
+        this.logs.push(`[+] Email validation: ${status}`);
+        break;
+      case 'usernames':
+        this.logs.push(`[+] Username extraction: primary="${data.primary}", ${data.variants?.length || 0} variants`);
+        break;
+      case 'breach':
+        if (data.breaches && data.breaches.length > 0) {
+          this.breaches = data.breaches.map((b: any) => ({
+            name: b.name,
+            date: b.breachDate || b.date,
+            description: b.description?.replace(/<[^>]*>/g, '') || '',
+            dataClasses: b.compromisedData || b.dataClasses || [],
+          }));
+          this.logs.push(`[!] BREACH ALERT: Found in ${data.breaches.length} breach(es)`);
+        } else {
+          this.logs.push('[✓] No breaches found');
+        }
+        break;
+      case 'gravatar':
+        this.hasGravatar = data.hasGravatar;
+        this.avatarUrl = data.avatarUrl || null;
+        this.logs.push(data.hasGravatar ? `[✓] Gravatar found: ${data.avatarUrl}` : '[ ] No Gravatar profile');
+        break;
+      case 'identity':
+        this.identityResult = data;
+        this.logs.push(data.realName ? `[✓] Identity resolved: ${data.realName} (${data.confidence})` : '[ ] Identity not resolved');
+        break;
+      case 'permutations':
+        this.emailPermutations = data;
+        const totalPerms = (data.workEmails?.length || 0) + (data.personalEmails?.length || 0);
+        this.logs.push(`[+] Generated ${totalPerms} email permutations`);
+        break;
+    }
+  }
+
+  private handleEmailEnd(dossier: EmailDossier) {
+    this.emailDossier = dossier;
+    this.summary = { foundCount: dossier.breaches?.length || 0, timeTakenMs: dossier.timeTakenMs };
+    this.isScanning = false;
+    this.flushBuffers();
+
+    this.emailScanResult = {
+      valid: dossier.validation.syntaxValid,
+      type: 'EMAIL',
+      sanitized: dossier.email,
+      breachesCount: dossier.breaches?.length || 0,
+      hasGravatar: dossier.gravatar?.hasGravatar || false,
+      avatarUrl: dossier.gravatar?.avatarUrl || null,
+    };
+
+    this.logs.push(`[✓] Email OSINT completed in ${dossier.timeTakenMs}ms. ${dossier.breaches?.length || 0} breach(es) found.`);
+
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
     }
   }
 
   // --- Trigger PDF Dossier Download ---
   async downloadDossier() {
-    if (!this.summary) return;
-    this.logs.push('[+] Packing dossier PDF and requesting download...');
+    if (!this.emailDossier && !this.phoneDossier && !this.summary) return;
+    this.logs.push('[+] Generating classified PDF dossier...');
     try {
-      window.print(); // Falls back to beautiful system print stylesheet or can fetch backend PDF
-      this.logs.push('[✓] Dossier report generated successfully.');
+      // Build dossier payload based on search target type
+      let dossierData: any;
+
+      if (this.phoneDossier) {
+        dossierData = {
+          phone: this.phoneDossier.phone,
+          validation: this.phoneDossier.validation,
+          callerId: this.phoneDossier.callerId,
+          peopleSearch: this.phoneDossier.peopleSearch,
+          socialSync: this.phoneDossier.socialSync,
+          timeTakenMs: this.summary?.timeTakenMs || 0,
+        };
+      } else {
+        dossierData = this.emailDossier || {
+          email: this.target.trim(),
+          validation: { syntaxValid: true },
+          breaches: this.breaches.map(b => ({ name: b.name, breachDate: b.date, description: b.description, compromisedData: b.dataClasses, domain: '', pwnCount: 0, isVerified: true })),
+          gravatar: { hasGravatar: this.hasGravatar, avatarUrl: this.avatarUrl },
+          identity: this.identityResult || { realName: null, employer: null, position: null, confidence: 'LOW' as const, sources: [] },
+          usernames: { primary: this.target.trim().split('@')[0] || '', variants: [] },
+          permutations: this.emailPermutations,
+          timeTakenMs: this.summary?.timeTakenMs || 0,
+        };
+      }
+
+      const response = await fetch(`${this.apiBase}/api/dossier`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dossierData),
+      });
+
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `dossier_${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      this.logs.push('[✓] Classified dossier PDF downloaded successfully.');
     } catch (err: any) {
       this.logs.push(`[!] Dossier export failed: ${err.message}`);
     }
   }
 
   // --- Helper Methods ---
-  private validateTarget(): 'EMAIL' | 'PHONE' | 'DOMAIN' | 'USERNAME' | null {
+  private startRealNameScan() {
+    const queryParams = new URLSearchParams({
+      target: this.target.trim(),
+      deep_scan: this.deepScanEnabled ? 'true' : 'false',
+      cookies: JSON.stringify(this.cookieOverrides)
+    });
+    const url = `${this.apiBase}/api/scan?${queryParams.toString()}`;
+    
+    this.logs.push('[+] Routing to Identity Resolution (Real Name) pipeline...');
+    this.logs.push('[+] Establishing SSE stream for identity scan...');
+    
+    this.progress = { completed: 0, total: 15, percentage: 0 };
+    
+    try {
+      this.eventSource = new EventSource(url);
+      
+      this.eventSource.addEventListener('progress', (e: MessageEvent) => {
+        const parsed = JSON.parse(e.data);
+        this.progress = parsed;
+        this.logs.push(`[+] Progress updated: ${parsed.completed}/${parsed.total} platforms checked (${parsed.percentage}%).`);
+      });
+      
+      this.eventSource.addEventListener('result', (e: MessageEvent) => {
+        const parsed = JSON.parse(e.data);
+        this.resultBuffer.push(parsed);
+        const status = parsed.status === 'FOUND' ? '[✓] FOUND' : '[ ] NOT FOUND';
+        this.logs.push(`${status}: ${parsed.platform} (${parsed.variant}) -> ${parsed.url}`);
+      });
+      
+      this.eventSource.addEventListener('end', (e: MessageEvent) => {
+        const parsed = JSON.parse(e.data);
+        this.identityDossier = parsed.dossier;
+        this.summary = { foundCount: parsed.dossier?.found?.length || 0, timeTakenMs: Date.now() - (this.scanStartTime || 0) };
+        this.isScanning = false;
+        this.flushBuffers();
+        this.logs.push(`[✓] Identity scan complete. Confidence score: ${parsed.dossier?.confidence || 'LOW'}`);
+        
+        if (this.eventSource) {
+          this.eventSource.close();
+          this.eventSource = null;
+        }
+      });
+      
+      this.eventSource.addEventListener('error', (e: Event) => {
+        if (this.isScanning) {
+          this.handleError('SSE stream connection error during identity scan.');
+        }
+      });
+    } catch (err: any) {
+      this.handleError(err.message || 'Failed to initiate SSE connection.');
+    }
+  }
+
+  private startDomainScan() {
+    const queryParams = new URLSearchParams({ target: this.target.trim() });
+    const url = `${this.apiBase}/api/scan?${queryParams.toString()}`;
+    
+    this.logs.push('[+] Routing to Domain Intelligence pipeline...');
+    this.logs.push('[+] Establishing SSE stream for domain resolution...');
+    
+    this.progress = { completed: 0, total: 100, percentage: 0 };
+
+    // Progressive Obsidian Graph: Initialize the graph shell immediately so it renders in real-time
+    this.domainDossier = {
+      domain: this.target.trim(),
+      whois: null,
+      subdomains: [],
+      certificates: [],
+      wildcardDetected: false,
+      graph: {
+        nodes: [
+          {
+            id: `dom-${this.target.trim()}`,
+            label: this.target.trim(),
+            type: 'Domain',
+            group: 'domain',
+            properties: { source: 'target-input' }
+          }
+        ],
+        edges: []
+      }
+    };
+    
+    try {
+      this.eventSource = new EventSource(url);
+      
+      this.eventSource.addEventListener('progress', (e: MessageEvent) => {
+        const parsed = JSON.parse(e.data);
+        this.progress = parsed;
+        this.logs.push(`[+] Progress: ${parsed.completed}/${parsed.total} subdomains resolved (${parsed.percentage}%).`);
+      });
+      
+      this.eventSource.addEventListener('result', (e: MessageEvent) => {
+        const parsed = JSON.parse(e.data);
+        if (parsed.status === 'INFO') {
+          this.logs.push(`[!] INFO: ${parsed.message}`);
+        } else {
+          this.resultBuffer.push(parsed);
+          this.logs.push(`[✓] SUBDOMAIN: ${parsed.subdomain} -> ${parsed.ip} (Cloudflare: ${parsed.isCloudflare ? 'Yes' : 'No'})`);
+
+          // Progressively push nodes and edges to the active graph
+          if (this.domainDossier && this.domainDossier.graph) {
+            const domainNodeId = `dom-${this.domainDossier.domain}`;
+            const subNodeId = `sub-${parsed.subdomain}`;
+            const ipNodeId = `ip-${parsed.ip}`;
+
+            // Add subdomain node if unique
+            if (!this.domainDossier.graph.nodes.some((n: any) => n.id === subNodeId)) {
+              this.domainDossier.graph.nodes.push({
+                id: subNodeId,
+                label: parsed.subdomain,
+                type: 'Subdomain',
+                group: 'subdomain',
+                properties: { source: 'crt.sh' }
+              });
+            }
+
+            // Link domain node to subdomain
+            if (!this.domainDossier.graph.edges.some((edge: any) => edge.source === domainNodeId && edge.target === subNodeId)) {
+              this.domainDossier.graph.edges.push({
+                source: domainNodeId,
+                target: subNodeId,
+                relation: 'HAS_SUBDOMAIN'
+              });
+            }
+
+            // If IP resolves, map IP node and resolve relation
+            if (parsed.ip) {
+              const shodanOrg = parsed.shodan?.org || '';
+              const shodanIsp = parsed.shodan?.isp || '';
+              const shodanOs = parsed.shodan?.os || '';
+              const shodanLoc = parsed.shodan ? `${parsed.shodan.city}, ${parsed.shodan.country}` : '';
+              const shodanPorts = parsed.shodan?.ports?.join(', ') || '';
+
+              if (!this.domainDossier.graph.nodes.some((n: any) => n.id === ipNodeId)) {
+                this.domainDossier.graph.nodes.push({
+                  id: ipNodeId,
+                  label: parsed.ip,
+                  type: 'IP',
+                  group: 'infrastructure',
+                  properties: {
+                    source: 'dns-resolution',
+                    isCloudflare: parsed.isCloudflare,
+                    shodan_org: shodanOrg,
+                    shodan_isp: shodanIsp,
+                    shodan_os: shodanOs,
+                    shodan_location: shodanLoc,
+                    shodan_ports: shodanPorts
+                  }
+                });
+              }
+
+              if (!this.domainDossier.graph.edges.some((edge: any) => edge.source === subNodeId && edge.target === ipNodeId)) {
+                this.domainDossier.graph.edges.push({
+                  source: subNodeId,
+                  target: ipNodeId,
+                  relation: 'RESOLVES_TO'
+                });
+              }
+
+              // Add Port nodes from Shodan progressive update
+              if (parsed.shodan && Array.isArray(parsed.shodan.ports)) {
+                parsed.shodan.ports.forEach((port: number) => {
+                  const portNodeId = `port-${parsed.ip}-${port}`;
+                  if (!this.domainDossier.graph.nodes.some((n: any) => n.id === portNodeId)) {
+                    this.domainDossier.graph.nodes.push({
+                      id: portNodeId,
+                      label: `Port ${port}`,
+                      type: 'Port',
+                      group: 'infrastructure',
+                      properties: {
+                        source: 'shodan-intel',
+                        portNumber: port
+                      }
+                    });
+                  }
+
+                  if (!this.domainDossier.graph.edges.some((edge: any) => edge.source === ipNodeId && edge.target === portNodeId)) {
+                    this.domainDossier.graph.edges.push({
+                      source: ipNodeId,
+                      target: portNodeId,
+                      relation: 'HAS_PORT'
+                    });
+                  }
+                });
+              }
+            }
+
+            // Force deep clone to notify Svelte 5 reactive runes
+            this.domainDossier = { ...this.domainDossier };
+          }
+        }
+      });
+      
+      this.eventSource.addEventListener('end', (e: MessageEvent) => {
+        const parsed = JSON.parse(e.data);
+        this.domainDossier = parsed.dossier;
+        this.summary = { foundCount: parsed.dossier?.subdomains?.length || 0, timeTakenMs: Date.now() - (this.scanStartTime || 0) };
+        this.isScanning = false;
+        this.flushBuffers();
+        this.logs.push(`[✓] Domain scan complete. Subdomains identified: ${parsed.dossier?.subdomains?.length || 0}`);
+        
+        if (this.eventSource) {
+          this.eventSource.close();
+          this.eventSource = null;
+        }
+      });
+      
+      this.eventSource.addEventListener('error', (e: Event) => {
+        if (this.isScanning) {
+          this.handleError('SSE stream connection error during domain resolution.');
+        }
+      });
+    } catch (err: any) {
+      this.handleError(err.message || 'Failed to initiate SSE connection.');
+    }
+  }
+
+  private validateTarget(): 'EMAIL' | 'PHONE' | 'DOMAIN' | 'REAL_NAME' | 'USERNAME' | null {
     const raw = this.target.trim();
     if (!raw) return null;
 
@@ -398,48 +955,31 @@ export class ScannerState {
     const EMAIL_REGEX = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
     if (EMAIL_REGEX.test(raw)) return 'EMAIL';
 
-    // 2. Phone check (e.g. +84987654321 or 0987654321)
-    const PHONE_REGEX = /^\+?[0-9]{7,15}$/;
-    if (PHONE_REGEX.test(raw.replace(/\s+/g, ''))) return 'PHONE';
+    // 2. Phone check (E.164 or VN local numbers)
+    const cleanPhone = raw.replace(/[\s\-\(\)\.]/g, '').replace('+', '');
+    if (/^\d+$/.test(cleanPhone)) {
+      const isE164 = (raw.startsWith('+') || raw.startsWith('00')) && cleanPhone.length >= 7 && cleanPhone.length <= 15;
+      const isLocal = raw.startsWith('0') && raw.length >= 9 && raw.length <= 11;
+      if (isE164 || isLocal) {
+        return 'PHONE';
+      }
+    }
 
-    // 3. Domain check (e.g. example.com)
-    const DOMAIN_REGEX = /^[a-zA-Z0-9\-]+\.[a-zA-Z]{2,63}$/;
-    if (DOMAIN_REGEX.test(raw)) return 'DOMAIN';
+    // 3. Domain check
+    const cleanDomain = raw.toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '').split('/')[0].split('?')[0];
+    const RECOGNIZED_TLDS = new Set(['com', 'org', 'net', 'edu', 'gov', 'vn', 'io', 'me', 'co', 'app', 'dev']);
+    const parts = cleanDomain.split('.');
+    if (parts.length >= 2 && RECOGNIZED_TLDS.has(parts[parts.length - 1])) {
+      return 'DOMAIN';
+    }
+
+    // 4. Real Name check
+    const nameWords = raw.split(/\s+/).filter(Boolean);
+    if (nameWords.length >= 2 && nameWords.length <= 5) {
+      const isName = nameWords.every(w => /^[a-zA-Z\u00C0-\u1EF9]+$/i.test(w));
+      if (isName) return 'REAL_NAME';
+    }
 
     return 'USERNAME';
-  }
-
-  private mockEmailBreachData() {
-    this.hasGravatar = true;
-    this.avatarUrl = 'https://www.gravatar.com/avatar/205e460b479e2e5b48aec07710c08d50?s=200';
-    this.emailScanResult = {
-      valid: true,
-      type: 'EMAIL',
-      sanitized: this.target.trim().toLowerCase(),
-      breachesCount: 3,
-      hasGravatar: true,
-      avatarUrl: this.avatarUrl
-    };
-
-    this.breaches = [
-      {
-        name: 'Adobe Creative Cloud',
-        date: 'October 2019',
-        description: 'In October 2019, Adobe experienced a data exposure that compromised over 7 million subscription records. The exposed database contained customer metadata.',
-        dataClasses: ['Email Addresses', 'Member IDs', 'Products Subscribed']
-      },
-      {
-        name: 'LinkedIn Scraping Leak',
-        date: 'April 2021',
-        description: 'Scraped data of 500 million LinkedIn users was compiled and posted on a hacker forum. It contains public records and full name metrics.',
-        dataClasses: ['Full Names', 'Email Addresses', 'Professional Profiles']
-      },
-      {
-        name: 'Canva Account Leak',
-        date: 'May 2019',
-        description: 'Canva suffered a cyber attack impacting 137 million accounts. The breach included usernames, emails, and passwords hashed with bcrypt.',
-        dataClasses: ['Passwords', 'Usernames', 'Email Addresses', 'Geographical Locations']
-      }
-    ];
   }
 }

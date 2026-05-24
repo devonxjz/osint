@@ -7,6 +7,10 @@
   import LogConsole from './lib/LogConsole.svelte';
   import BreachCard from './lib/BreachCard.svelte';
   import DossierSummary from './lib/DossierSummary.svelte';
+  import PhoneDossierPanel from './lib/PhoneDossierPanel.svelte';
+  import EmailDossierPanel from './lib/EmailDossierPanel.svelte';
+  import IdentityDossierPanel from './lib/IdentityDossierPanel.svelte';
+  import DomainDossierPanel from './lib/DomainDossierPanel.svelte';
 
   const scanner = new ScannerState(typeof window !== 'undefined' ? window.location.origin : '');
 </script>
@@ -16,22 +20,38 @@
   <header class="navbar">
     <div class="logo-section">
       <div class="logo-badge">Ω</div>
-      <h1 class="logo-title">Antigravity OSINT Intelligence Suite</h1>
+      <h1 class="logo-title">{scanner.t.appTitle}</h1>
     </div>
     
-    <!-- Light/Dark Mode Switcher -->
-    <button
-      type="button"
-      class="theme-btn"
-      onclick={() => scanner.toggleTheme()}
-      aria-label="Toggle visual theme mode"
-    >
-      {#if scanner.theme === 'dark'}
-        ☀️
-      {:else}
-        🌙
-      {/if}
-    </button>
+    <div class="nav-controls">
+      <!-- Language Switcher -->
+      <button
+        type="button"
+        class="lang-btn"
+        onclick={() => scanner.toggleLanguage()}
+        aria-label={scanner.t.toggleLang}
+      >
+        {#if scanner.language === 'vi'}
+          🇻🇳 VI
+        {:else}
+          🇬🇧 EN
+        {/if}
+      </button>
+
+      <!-- Light/Dark Mode Switcher -->
+      <button
+        type="button"
+        class="theme-btn"
+        onclick={() => scanner.toggleTheme()}
+        aria-label={scanner.t.toggleTheme}
+      >
+        {#if scanner.theme === 'dark'}
+          ☀️
+        {:else}
+          🌙
+        {/if}
+      </button>
+    </div>
   </header>
 
   <!-- Module 7.1: SearchBar Component -->
@@ -41,12 +61,12 @@
   {#if scanner.isScanning || (scanner.progress.completed > 0 && scanner.progress.completed < scanner.progress.total)}
     <div class="progress-card">
       <div class="progress-info">
-        <span style="color: var(--text-primary);">Scanning target digital profiles...</span>
+        <span style="color: var(--text-primary);">{scanner.t.scanningTarget}</span>
         <span style="color: var(--accent-blue);">
           {#if scanner.etaSeconds !== null}
-            <span style="margin-right: 8px; color: var(--accent-purple);">ETA: {scanner.etaSeconds}s |</span>
+            <span style="margin-right: 8px; color: var(--accent-purple);">{scanner.t.eta}: {scanner.etaSeconds}s |</span>
           {/if}
-          {scanner.progress.completed} / {scanner.progress.total} platforms ({scanner.progress.percentage}%)
+          {scanner.progress.completed} / {scanner.progress.total} {scanner.t.platforms} ({scanner.progress.percentage}%)
         </span>
       </div>
       <div class="progress-bar-bg">
@@ -57,12 +77,22 @@
 
   <!-- Main Multi-Column Workspace Grid -->
   <main class="dashboard-grid">
-    <!-- Left Column: Platforms Status Grid -->
+    <!-- Left Column: Contextual Intelligence Output -->
     <div style="display: flex; flex-direction: column; gap: 32px;">
-      <CardGrid {scanner} />
+      {#if scanner.targetType === 'PHONE'}
+        <PhoneDossierPanel {scanner} />
+      {:else if scanner.targetType === 'EMAIL'}
+        <EmailDossierPanel {scanner} />
+      {:else if scanner.targetType === 'REAL_NAME'}
+        <IdentityDossierPanel {scanner} />
+      {:else if scanner.targetType === 'DOMAIN'}
+        <DomainDossierPanel {scanner} />
+      {:else}
+        <CardGrid {scanner} />
+      {/if}
     </div>
 
-    <!-- Right Column: Console Terminal Shell & Dossier Summaries -->
+    <!-- Right Column: Operational Control Panel -->
     <div style="display: flex; flex-direction: column; gap: 32px;">
       <LogConsole {scanner} />
       <DossierSummary {scanner} />
@@ -70,3 +100,4 @@
     </div>
   </main>
 </div>
+

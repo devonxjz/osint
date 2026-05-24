@@ -1,6 +1,6 @@
 'use strict';
 
-const { analyzeInput, ERRORS } = require('../api/analyzer');
+const { analyzeInput, ERRORS } = require('../dist-backend/shared');
 const { benchmarkSync } = require('./utils/benchmark');
 
 describe('analyzeInput()', () => {
@@ -71,10 +71,9 @@ describe('analyzeInput()', () => {
       expect(result.error).toBe(ERRORS.USERNAME_LONG);
     });
 
-    it('rejects username with spaces', () => {
+    it('classifies spaced name as REAL_NAME rather than failing', () => {
       const result = analyzeInput('john doe');
-      expect(result.valid).toBe(false);
-      expect(result.error).toBe(ERRORS.INVALID_FORMAT);
+      expect(result).toEqual({ type: 'REAL_NAME', valid: true, sanitized: 'John Doe' });
     });
 
     it('rejects username with # $ % special chars', () => {
@@ -87,6 +86,69 @@ describe('analyzeInput()', () => {
       const result = analyzeInput('<script>alert(1)</script>');
       expect(result.valid).toBe(false);
       expect(result.error).toBe(ERRORS.INVALID_FORMAT);
+    });
+  });
+
+  describe('5-Type Input Detection & Normalization (v2)', () => {
+    describe('REAL_NAME detection & Vietnamese diacritics stripping', () => {
+      it('detects simple name and normalizes title casing', () => {
+        const result = analyzeInput('  john  doe ');
+        expect(result).toEqual({ type: 'REAL_NAME', valid: true, sanitized: 'John Doe' });
+      });
+
+      it('strips Vietnamese accents and normalizes to base ASCII title-cased name', () => {
+        const result = analyzeInput('Nguyễn Văn A');
+        expect(result).toEqual({ type: 'REAL_NAME', valid: true, sanitized: 'Nguyen Van A' });
+      });
+
+      it('normalizes complex Vietnamese diacritics and đ/Đ letters', () => {
+        const result = analyzeInput('Trần Quốc Đạt');
+        expect(result).toEqual({ type: 'REAL_NAME', valid: true, sanitized: 'Tran Quoc Dat' });
+      });
+
+      it('defaults 1-word name to USERNAME', () => {
+        const result = analyzeInput('Zendaya');
+        expect(result.type).toBe('USERNAME');
+      });
+    });
+
+    describe('PHONE detection & VN local SĐT normalization', () => {
+      it('detects standard VN local format starting with 0 and normalizes to E.164 (+84)', () => {
+        const result = analyzeInput('0901234567');
+        expect(result).toEqual({ type: 'PHONE', valid: true, sanitized: '+84901234567' });
+      });
+
+      it('handles formatted local/international numbers with brackets and spaces', () => {
+        const result = analyzeInput('+84 (090) 123-4567');
+        expect(result).toEqual({ type: 'PHONE', valid: true, sanitized: '+84901234567' });
+      });
+
+      it('passes 9-character digit strings through as USERNAME if they do not start with a prefix', () => {
+        const result = analyzeInput('123456789');
+        expect(result.type).toBe('USERNAME');
+      });
+    });
+
+    describe('DOMAIN detection & sanitization', () => {
+      it('detects domain name with valid common TLD', () => {
+        const result = analyzeInput('example.com');
+        expect(result).toEqual({ type: 'DOMAIN', valid: true, sanitized: 'example.com' });
+      });
+
+      it('strips protocol and trailing slashes/parameters from domain', () => {
+        const result = analyzeInput('https://www.Example.com/path?query=1');
+        expect(result).toEqual({ type: 'DOMAIN', valid: true, sanitized: 'example.com' });
+      });
+
+      it('classifies dot-connector username as USERNAME if no valid TLD present', () => {
+        const result = analyzeInput('john.doe');
+        expect(result.type).toBe('USERNAME');
+      });
+
+      it('classifies dot-connector as DOMAIN if valid TLD present', () => {
+        const result = analyzeInput('john.doe.io');
+        expect(result).toEqual({ type: 'DOMAIN', valid: true, sanitized: 'john.doe.io' });
+      });
     });
   });
 
@@ -152,7 +214,7 @@ describe('analyzeInput()', () => {
 
     it('module loads under 5ms (indirectly tested by require speed)', () => {
       const start = performance.now();
-      require('../api/analyzer');
+      require('../dist-backend/shared');
       const end = performance.now();
       expect(end - start).toBeLessThan(5.0);
     });

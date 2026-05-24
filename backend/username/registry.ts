@@ -1,17 +1,32 @@
-// backend/src/registry.js
+// backend/registry.ts
 
 'use strict';
 
+export interface PlatformConfig {
+  name: string;
+  category: string;
+  url: string;
+  checkType: 'status' | 'text' | 'selector' | 'api' | 'browser';
+  checkValue: any;
+  requiresProxy?: boolean;
+  envCookieKey?: string;
+  riskLevel?: string;
+  identifierType?: string;
+  timeout?: number;
+  apiEndpoint?: string;
+  envTokenKey?: string;
+}
+
 // Curated Registry of social, tech, gaming, and media platforms with matching rules
-const PLATFORMS = [
+const PLATFORMS: PlatformConfig[] = [
   // Category: Tech (13 platforms)
-  { name: 'GitHub',       category: 'Tech',   url: 'https://github.com/{}',              checkType: 'status',   checkValue: 404 },
+  { name: 'GitHub',       category: 'Tech',   url: 'https://github.com/{}',              checkType: 'api',      checkValue: 404, apiEndpoint: 'https://api.github.com/users/{}', envTokenKey: 'GITHUB_TOKEN' },
   { name: 'GitLab',       category: 'Tech',   url: 'https://gitlab.com/{}',              checkType: 'status',   checkValue: 404 },
-  { name: 'NPM',          category: 'Tech',   url: 'https://www.npmjs.com/~{}',          checkType: 'status',   checkValue: 404 },
+  { name: 'NPM',          category: 'Tech',   url: 'https://www.npmjs.com/~{}',          checkType: 'api',      checkValue: 404, apiEndpoint: 'https://registry.npmjs.org/-/user/org.couchdb.user:{}' },
   { name: 'DockerHub',    category: 'Tech',   url: 'https://hub.docker.com/u/{}',        checkType: 'status',   checkValue: 404 },
   { name: 'LeetCode',     category: 'Tech',   url: 'https://leetcode.com/{}',            checkType: 'text',     checkValue: 'user not found' },
   { name: 'CodePen',      category: 'Tech',   url: 'https://codepen.io/{}',              checkType: 'status',   checkValue: 404 },
-  { name: 'HackerNews',   category: 'Tech',   url: 'https://news.ycombinator.com/user?id={}', checkType: 'text', checkValue: 'No such user.' },
+  { name: 'HackerNews',   category: 'Tech',   url: 'https://news.ycombinator.com/user?id={}', checkType: 'api',      checkValue: 'null', apiEndpoint: 'https://hacker-news.firebaseio.com/v0/user/{}.json' },
   { name: 'Replit',       category: 'Tech',   url: 'https://replit.com/@{}',             checkType: 'status',   checkValue: 404 },
   { name: 'Dev.to',       category: 'Tech',   url: 'https://dev.to/{}',                  checkType: 'status',   checkValue: 404 },
   { name: 'Hashnode',     category: 'Tech',   url: 'https://hashnode.com/@{}',           checkType: 'status',   checkValue: 404 },
@@ -19,7 +34,7 @@ const PLATFORMS = [
   { name: 'Devpost',      category: 'Tech',   url: 'https://devpost.com/{}',             checkType: 'status',   checkValue: 404 },
 
   // Category: Social (27 platforms)
-  { name: 'Reddit',         category: 'Social', url: 'https://www.reddit.com/user/{}',      checkType: 'text',     checkValue: 'Sorry, nobody on Reddit goes by that name.' },
+  { name: 'Reddit',         category: 'Social', url: 'https://www.reddit.com/user/{}',      checkType: 'api',      checkValue: 404, apiEndpoint: 'https://www.reddit.com/user/{}/about.json' },
   { name: 'Medium',         category: 'Social', url: 'https://medium.com/@{}',              checkType: 'status',   checkValue: 404 },
   { name: 'BuyMeACoffee',   category: 'Social', url: 'https://www.buymeacoffee.com/{}',     checkType: 'status',   checkValue: 404 },
   { name: 'Patreon',        category: 'Social', url: 'https://www.patreon.com/{}',          checkType: 'status',   checkValue: 404 },
@@ -41,14 +56,14 @@ const PLATFORMS = [
   { name: 'Kickstarter',    category: 'Social', url: 'https://www.kickstarter.com/profile/{}', checkType: 'status', checkValue: 404 },
   { name: 'Indiegogo',      category: 'Social', url: 'https://www.indiegogo.com/individuals/{}', checkType: 'status', checkValue: 404 },
   // Group B Evasion platforms
-  { name: 'Facebook',       category: 'Social', url: 'https://www.facebook.com/{}',         checkType: 'selector', checkValue: 'meta[property="og:title"]', requiresProxy: true, envCookieKey: 'FACEBOOK_COOKIE_KEY', riskLevel: 'HIGH' },
-  { name: 'Instagram',      category: 'Social', url: 'https://www.instagram.com/{}/',       checkType: 'text',     checkValue: 'page_not_found', requiresProxy: true, envCookieKey: 'INSTAGRAM_COOKIE_KEY', riskLevel: 'HIGH' },
-  { name: 'LinkedIn',       category: 'Social', url: 'https://www.linkedin.com/in/{}',      checkType: 'selector', checkValue: 'code.identity-state', requiresProxy: true, envCookieKey: 'LINKEDIN_COOKIE_KEY', riskLevel: 'HIGH' },
+  { name: 'Facebook',       category: 'Social', url: 'https://www.facebook.com/{}',         checkType: 'browser',  checkValue: 'meta[property="og:title"]', requiresProxy: true, envCookieKey: 'FACEBOOK_COOKIE_KEY', riskLevel: 'HIGH' },
+  { name: 'Instagram',      category: 'Social', url: 'https://www.instagram.com/{}/',       checkType: 'browser',  checkValue: 'page_not_found', requiresProxy: true, envCookieKey: 'INSTAGRAM_COOKIE_KEY', riskLevel: 'HIGH' },
+  { name: 'LinkedIn',       category: 'Social', url: 'https://www.linkedin.com/in/{}',      checkType: 'browser',  checkValue: 'code.identity-state', requiresProxy: true, envCookieKey: 'LINKEDIN_COOKIE_KEY', riskLevel: 'HIGH' },
 
   // Category: Gaming (14 platforms)
-  { name: 'Steam',           category: 'Gaming', url: 'https://steamcommunity.com/id/{}',   checkType: 'text',     checkValue: 'The specified profile could not be found.' },
+  { name: 'Steam',           category: 'Gaming', url: 'https://steamcommunity.com/id/{}',   checkType: 'browser',  checkValue: 'The specified profile could not be found.' },
   { name: 'Steam Profiles',  category: 'Gaming', url: 'https://steamcommunity.com/profiles/{}', checkType: 'text',  checkValue: 'The specified profile could not be found.' },
-  { name: 'Chess.com',       category: 'Gaming', url: 'https://www.chess.com/member/{}',    checkType: 'status',   checkValue: 404 },
+  { name: 'Chess.com',       category: 'Gaming', url: 'https://www.chess.com/member/{}',    checkType: 'api',      checkValue: 404, apiEndpoint: 'https://api.chess.com/pub/player/{}' },
   { name: 'Lichess',         category: 'Gaming', url: 'https://lichess.org/@/{}',           checkType: 'status',   checkValue: 404 },
   { name: 'Itch.io',         category: 'Gaming', url: 'https://{}.itch.io',                 checkType: 'status',   checkValue: 404 },
   { name: 'Speedrun.com',    category: 'Gaming', url: 'https://www.speedrun.com/user/{}',   checkType: 'status',   checkValue: 404 },
@@ -62,7 +77,7 @@ const PLATFORMS = [
   { name: 'RetroAchievements', category: 'Gaming', url: 'https://retroachievements.org/user/{}', checkType: 'status', checkValue: 404 },
 
   // Category: Media (17 platforms)
-  { name: 'Spotify',        category: 'Media', url: 'https://open.spotify.com/user/{}',    checkType: 'status',   checkValue: 404 },
+  { name: 'Spotify',        category: 'Media', url: 'https://open.spotify.com/user/{}',    checkType: 'browser',  checkValue: 404 },
   { name: 'Instructables',  category: 'Media', url: 'https://www.instructables.com/member/{}/', checkType: 'text', checkValue: 'Not found' },
   { name: 'SoundCloud',     category: 'Media', url: 'https://soundcloud.com/{}',            checkType: 'status',   checkValue: 404 },
   { name: 'Bandcamp',       category: 'Media', url: 'https://{}.bandcamp.com',              checkType: 'status',   checkValue: 404 },
@@ -93,7 +108,7 @@ const PLATFORMS = [
   { name: 'AfreecaTV',      category: 'Regional', url: 'https://bj.afreecatv.com/{}',       checkType: 'status',   checkValue: 404 },
   { name: 'LINE',           category: 'Regional', url: 'https://line.me/ti/p/~{}',          checkType: 'status',   checkValue: 404 },
   { name: 'VK',             category: 'Regional', url: 'https://vk.com/{}',                 checkType: 'text',     checkValue: 'profile_deleted' },
-  { name: 'Douyin',         category: 'Regional', url: 'https://www.douyin.com/user/{}',    checkType: 'selector', checkValue: '.user-info-container', requiresProxy: true, envCookieKey: 'DOUYIN_COOKIE_KEY', riskLevel: 'HIGH' },
+  { name: 'Douyin',         category: 'Regional', url: 'https://www.douyin.com/user/{}',    checkType: 'browser',  checkValue: '.user-info-container', requiresProxy: true, envCookieKey: 'DOUYIN_COOKIE_KEY', riskLevel: 'HIGH' },
 
   // Category: Privacy (10 platforms)
   { name: 'Telegram',       category: 'Privacy', url: 'https://t.me/{}',                    checkType: 'text',     checkValue: 'If you have Telegram, you can contact' },
@@ -114,10 +129,8 @@ const PLATFORMS = [
 
 /**
  * Maps default schema values for platform lookup configurations.
- * @param {object} p - Raw platform config
- * @returns {object}
  */
-function mapPlatformDefaults(p) {
+function mapPlatformDefaults(p: PlatformConfig): PlatformConfig {
   return {
     identifierType: 'USERNAME',
     requiresProxy: false,
@@ -127,10 +140,8 @@ function mapPlatformDefaults(p) {
 
 /**
  * Returns all platforms, optionally filtered by category.
- * @param {string[]} [categories] - e.g. ['Tech', 'Gaming']
- * @returns {object[]}
  */
-function getPlatforms(categories = []) {
+export function getPlatforms(categories: string[] = []): PlatformConfig[] {
   if (!categories || categories.length === 0) {
     return getAllPlatforms();
   }
@@ -142,23 +153,17 @@ function getPlatforms(categories = []) {
 
 /**
  * Returns the full unfiltered registry.
- * @returns {object[]}
  */
-function getAllPlatforms() {
+export function getAllPlatforms(): PlatformConfig[] {
   return PLATFORMS.map(p => mapPlatformDefaults(p));
 }
 
 /**
  * Returns all unique category names in the registry.
- * @returns {string[]}
  */
-function getCategories() {
+export function getCategories(): string[] {
   return [...new Set(PLATFORMS.map(p => p.category))];
 }
 
-module.exports = {
-  getPlatforms,
-  getAllPlatforms,
-  getCategories,
-  platforms: PLATFORMS // Keep legacy export for backwards compatibility
-};
+// Keep legacy exports for backwards compatibility
+export const platforms = PLATFORMS;

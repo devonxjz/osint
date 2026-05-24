@@ -51,27 +51,27 @@
   {#if missingCredentialsPlatforms.length > 0}
     <div class="breach-alert-card" style="border-color: rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.02); margin-bottom: 8px; padding: 22px; animation: fade-in-up 0.3s ease; display: flex; flex-direction: column; gap: 14px;">
       <div class="breach-card-header" style="color: var(--accent-orange); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(245, 158, 11, 0.15); padding-bottom: 8px;">
-        <span style="font-weight: 700; display: flex; align-items: center; gap: 8px;">⚠️ Restricted platform session overrides</span>
+        <span style="font-weight: 700; display: flex; align-items: center; gap: 8px;">{scanner.t.restrictedCookies}</span>
         <button 
           type="button" 
           onclick={() => showGuide = !showGuide}
           style="background: transparent; border: 1px solid rgba(245, 158, 11, 0.3); color: var(--accent-orange); font-size: 11px; padding: 4px 10px; border-radius: 20px; cursor: pointer; transition: all 0.2s ease;"
         >
-          {showGuide ? 'Hide Guide ▲' : 'Show Extraction Guide ▼'}
+          {showGuide ? scanner.t.hideGuide : scanner.t.showGuide}
         </button>
       </div>
 
       <!-- Collapsible Extraction Instructions -->
       {#if showGuide}
         <div style="background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.1); border-radius: 8px; padding: 14px; font-size: 13px; color: var(--text-secondary); display: flex; flex-direction: column; gap: 8px; animation: fade-in-up 0.2s ease;">
-          <h5 style="margin: 0; color: var(--text-primary); font-weight: 700;">🌐 How to extract and configure your platform cookies:</h5>
+          <h5 style="margin: 0; color: var(--text-primary); font-weight: 700;">{scanner.t.howToExtractCookies}</h5>
           <ol style="margin: 0; padding-left: 18px; line-height: 1.6; display: flex; flex-direction: column; gap: 4px;">
-            <li>Install a cookie extractor extension in Chrome/Edge/Firefox (e.g. <strong><a href="https://cookie-editor.com/" target="_blank" style="color: var(--accent-blue);">Cookie-Editor</a></strong> or <strong>EditThisCookie</strong>).</li>
-            <li>Open a new browser tab, navigate to the target site (e.g., <code>linkedin.com</code> or <code>facebook.com</code>) and log in to your active account.</li>
-            <li>Click the extension icon at the top right of your browser.</li>
-            <li>Locate the main authentication key (e.g. <code>li_at</code> for LinkedIn, or <code>xs</code> and <code>c_user</code> for Facebook).</li>
-            <li>Alternatively, copy the full <strong>Header String</strong> or raw cookie text.</li>
-            <li>Paste it directly in the input box next to the matching platform below and click <strong>Apply</strong>. Overrides are safely kept in your browser local storage!</li>
+            <li>{scanner.t.cookieStep1}</li>
+            <li>{scanner.t.cookieStep2}</li>
+            <li>{scanner.t.cookieStep3}</li>
+            <li>{scanner.t.cookieStep4}</li>
+            <li>{scanner.t.cookieStep5}</li>
+            <li>{scanner.t.cookieStep6}</li>
           </ol>
         </div>
       {/if}
@@ -84,34 +84,34 @@
             
             <input 
               type="text" 
-              placeholder="Paste cookie string here (e.g. li_at=session...)"
-              value={scanner.cookieOverrides[plat.envCookieKey] || ''}
+              placeholder={scanner.t.pasteCookiePlaceholder}
+              value={scanner.cookieOverrides[plat.envCookieKey || ''] || ''}
               style="background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 6px; font-size: 12px; outline: none; font-family: var(--font-mono);"
               onchange={(e) => {
                 const val = (e.target as HTMLInputElement).value.trim();
-                scanner.saveCookieOverride(plat.envCookieKey, val);
+                scanner.saveCookieOverride(plat.envCookieKey || '', val);
               }}
             />
-
+            
             <div style="display: flex; gap: 6px;">
-              {#if scanner.cookieOverrides[plat.envCookieKey]}
+              {#if scanner.cookieOverrides[plat.envCookieKey || '']}
                 <button
                   type="button"
                   style="background: var(--accent-red); color: white; border: none; font-size: 11px; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 600; width: 100%;"
-                  onclick={() => scanner.saveCookieOverride(plat.envCookieKey, '')}
+                  onclick={() => scanner.saveCookieOverride(plat.envCookieKey || '', '')}
                 >
-                  Clear
+                  {scanner.t.clear}
                 </button>
               {:else}
                 <button
                   type="button"
                   style="background: var(--accent-blue); color: white; border: none; font-size: 11px; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 600; width: 100%;"
                   onclick={(e) => {
-                    const inp = (e.target as HTMLButtonElement).parentElement.previousElementSibling as HTMLInputElement;
-                    scanner.saveCookieOverride(plat.envCookieKey, inp.value.trim());
+                    const inp = (e.target as HTMLButtonElement).parentElement?.previousElementSibling as HTMLInputElement;
+                    scanner.saveCookieOverride(plat.envCookieKey || '', inp?.value?.trim() || '');
                   }}
                 >
-                  Apply
+                  {scanner.t.apply}
                 </button>
               {/if}
             </div>
@@ -121,21 +121,20 @@
     </div>
   {/if}
 
-  <!-- HUD Stats Header Panel -->
   <div class="search-card" style="box-shadow: var(--shadow-sm); padding: 20px 24px; gap: 16px; border-color: var(--border-color);">
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
       <div>
-        <h3 class="section-title" style="font-size: 16px;">🔍 Dynamic Network Coverage</h3>
-        <span class="card-category-tag">Checked {scannedCount} of {filteredPlatforms.length} platform endpoints</span>
+        <h3 class="section-title" style="font-size: 16px;">{scanner.t.dynNetCoverage}</h3>
+        <span class="card-category-tag">{scanner.t.checkedOf.replace('{scannedCount}', scannedCount.toString()).replace('{totalCount}', filteredPlatforms.length.toString())}</span>
       </div>
 
       <!-- Compact Score Badges -->
       <div style="display: flex; gap: 12px; align-items: center;">
         <span class="status-badge" style="background: var(--bg-secondary); color: var(--text-primary); font-size: 12px; font-weight: 700; padding: 6px 12px;">
-          Checked: {scannedCount}
+          {scanner.t.checkedBadge}: {scannedCount}
         </span>
         <span class="status-badge" style="background: rgba(16, 185, 129, 0.1); color: var(--accent-green); font-size: 12px; font-weight: 700; padding: 6px 12px;">
-          Found: {foundCount}
+          {scanner.t.foundBadge}: {foundCount}
         </span>
       </div>
     </div>
@@ -153,18 +152,18 @@
     <!-- Empty state when no categories selected -->
     <div style="padding: 60px 24px; text-align: center; color: var(--text-secondary); background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 16px; box-shadow: var(--shadow-sm);">
       <span style="font-size: 40px;">⚠️</span>
-      <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">No Investigation Categories Selected</h4>
+      <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">{scanner.t.noCatSelected}</h4>
       <p style="margin: 0; font-size: 14px; max-width: 440px; line-height: 1.5;">
-        Please select at least one active investigation category chip at the top to filter and display platforms.
+        {scanner.t.noCatSelectedDesc}
       </p>
     </div>
   {:else if scannedCount === 0 && !scanner.isScanning}
     <!-- Empty State: Before search begins -->
     <div style="padding: 60px 24px; text-align: center; color: var(--text-secondary); background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 16px; box-shadow: var(--shadow-sm);">
       <span style="font-size: 40px;">🕵️</span>
-      <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">Awaiting Target Investigation</h4>
+      <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">{scanner.t.awaitingInvest}</h4>
       <p style="margin: 0; font-size: 14px; max-width: 440px; line-height: 1.5;">
-        Enter a target username, email, domain, or phone above, select categories, and click <strong>Scan</strong> to resolve digital profiles in real-time.
+        {scanner.t.awaitingInvestDesc}
       </p>
     </div>
   {:else}
@@ -176,18 +175,18 @@
         <!-- Show beautiful real-time scan spinner while scanning with 0 found matches so far -->
         <div style="padding: 60px 24px; text-align: center; color: var(--text-secondary); background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 16px; box-shadow: var(--shadow-sm); width: 100%;">
           <div class="pulse-loader" style="width: 32px; height: 32px; border: 3.5px solid var(--border-color); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-          <h4 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--text-primary);">Footprint Lookup Active</h4>
+          <h4 style="margin: 0; font-size: 15px; font-weight: 700; color: var(--text-primary);">{scanner.t.lookupActive}</h4>
           <p style="margin: 0; font-size: 13px; max-width: 400px; line-height: 1.5;">
-            Scanning platform directories in real-time. Matches will appear here immediately as they are discovered.
+            {scanner.t.lookupActiveDesc}
           </p>
         </div>
       {:else}
         <!-- No matches found after scan completed -->
         <div style="padding: 60px 24px; text-align: center; color: var(--text-secondary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 16px; box-shadow: var(--shadow-sm); width: 100%;">
           <span style="font-size: 40px;">∅</span>
-          <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">No Matches Identified</h4>
+          <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">{scanner.t.noMatch}</h4>
           <p style="margin: 0; font-size: 14px; max-width: 440px; line-height: 1.5;">
-            The investigation was completed, but no public digital footprints matching this target were detected on the searched networks.
+            {scanner.t.noMatchDesc}
           </p>
         </div>
       {/if}
@@ -199,7 +198,7 @@
           <div class="platform-status-card found" style="animation: fade-in-up 0.3s ease; opacity: 1;">
             <div class="card-top-row">
               <h4 class="card-title" style="font-size: 16px;">{platform.name}</h4>
-              <span class="status-badge found">Active Match</span>
+              <span class="status-badge found">{scanner.t.activeMatch}</span>
             </div>
             
             <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -235,9 +234,9 @@
               target="_blank"
               rel="noreferrer"
               class="dossier-export-btn"
-              style="font-size: 12px; padding: 8px 12px; border-radius: 6px; margin-top: auto; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--text-primary); color: var(--bg-card); transition: all 0.2s ease;"
+              style="font-size: 12px; padding: 8px 12px; border-radius: 6px; margin-top: auto; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--text-primary); color: var(--bg-card); transition: all 0.2s ease; box-sizing: border-box;"
             >
-              Visit Profile ↗
+              {scanner.t.visitProfileBtn}
             </a>
           </div>
         {/each}

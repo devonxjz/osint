@@ -1,6 +1,6 @@
 'use strict';
 
-const { getPlatforms, getAllPlatforms, getCategories } = require('../api/registry');
+const { getPlatforms, getAllPlatforms, getCategories } = require('../dist-backend/username');
 const { benchmarkSync } = require('./utils/benchmark');
 
 describe('Platform Registry', () => {
@@ -13,7 +13,7 @@ describe('Platform Registry', () => {
   it('all platforms have required fields with correct types', () => {
     const REQUIRED = ['name', 'category', 'url', 'checkType', 'checkValue'];
     const ALLOWED_CATEGORIES = ['Social', 'Tech', 'Gaming', 'Media', 'Regional', 'Privacy', 'DarkWeb'];
-    const ALLOWED_CHECK_TYPES = ['status', 'text', 'selector'];
+    const ALLOWED_CHECK_TYPES = ['status', 'text', 'selector', 'api', 'browser'];
 
     all.forEach(p => {
       // 1. Check all required fields are present
@@ -28,6 +28,8 @@ describe('Platform Registry', () => {
       // 4. Validate checkValue type depending on checkType
       if (p.checkType === 'status') {
         expect(typeof p.checkValue).toBe('number');
+      } else if (p.checkType === 'api' || p.checkType === 'browser') {
+        expect(['string', 'number']).toContain(typeof p.checkValue);
       } else {
         expect(typeof p.checkValue).toBe('string');
       }
@@ -173,7 +175,7 @@ describe('Platform Registry', () => {
 
     it('module loads under 5ms (indirectly tested by require speed)', () => {
       const start = performance.now();
-      require('../api/registry');
+      require('../dist-backend/username');
       const end = performance.now();
       expect(end - start).toBeLessThan(5.0);
     });

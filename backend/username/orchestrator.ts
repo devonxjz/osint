@@ -1,17 +1,49 @@
-// api/orchestrator.js
+// backend/username/orchestrator.ts
 
 'use strict';
 
-const { scanPlatform } = require('./scanner');
+import { scanPlatform, Platform, ScanResult } from './scanner';
+
+interface CircuitBreakerState {
+  consecutiveFailures: number;
+  trippedUntil: number;
+}
 
 // Global/Module-level state for circuit breakers
-const circuitBreakers = {}; // key: platformName -> { consecutiveFailures: number, trippedUntil: number }
+export const circuitBreakers: Record<string, CircuitBreakerState> = {}; // key: platformName -> { consecutiveFailures: number, trippedUntil: number }
 
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function orchestrateScan(target, platforms, callbacks, options = {}) {
-  const maxConcurrency = options.maxConcurrency || 20;
+export interface ScanCallbacks {
+  onResult: (result: ScanResult) => void;
+  onProgress: (progress: { completed: number; total: number; percentage: number }) => void;
+  onError: (platformName: string, errorType: string) => void;
+}
+
+export interface OrchestrateOptions {
+  maxConcurrency?: number; // legacy map to htmlConcurrency
+  highRiskConcurrency?: number; // legacy
+  apiConcurrency?: number;
+  htmlConcurrency?: number;
+  browserConcurrency?: number;
+  retryAttempts?: number;
+  retryBaseDelayMs?: number;
+  cache?: any;
+  signal?: AbortSignal | null;
+}
+
+export async function orchestrateScan(
+  target: string,
+  platforms: Platform[],
+  callbacks: ScanCallbacks,
+  options: OrchestrateOptions = {}
+): Promise<{ foundCount: number; timeTakenMs: number }> {
+  // Concurrency Lane defaults with backwards compatible fallbacks
+  const apiConcurrency = options.apiConcurrency || 30;
+  const htmlConcurrency = options.htmlConcurrency || options.maxConcurrency || 15;
   const highRiskConcurrency = options.highRiskConcurrency || 3;
+  const browserConcurrency = options.browserConcurrency || 2;
+
   const retryAttempts = options.retryAttempts !== undefined ? options.retryAttempts : 2;
   const retryBaseDelayMs = options.retryBaseDelayMs !== undefined ? options.retryBaseDelayMs : 500;
   const cache = options.cache;
@@ -22,11 +54,10 @@ async function orchestrateScan(target, platforms, callbacks, options = {}) {
   let completed = 0;
   let foundCount = 0;
 
-  // Helper to check if signal is aborted
   const isAborted = () => signal && signal.aborted;
 
   // 1. Check cache first
-  const remainingPlatforms = [];
+  const remainingPlatforms: Platform[] = [];
   for (const platform of platforms) {
     if (isAborted()) break;
 
@@ -57,14 +88,23 @@ async function orchestrateScan(target, platforms, callbacks, options = {}) {
     };
   }
 
-  // 2. Priority Scheduling: low-risk first, high-risk last
-  const isHighRisk = (p) => p.riskLevel === 'HIGH' || p.requiresProxy === true || p.category === 'DarkWeb';
-  
-  const standardPlatforms = remainingPlatforms.filter(p => !isHighRisk(p));
-  const highRiskPlatforms = remainingPlatforms.filter(p => isHighRisk(p));
+  // 2. Classify platforms into specialized lanes
+  const isHighRisk = (p: Platform) => {
+    const rawP = p as any;
+    return rawP.riskLevel === 'HIGH' || rawP.requiresProxy === true || rawP.category === 'DarkWeb';
+  };
 
-  // 3. Execution Lanes
-  async function runLane(platformList, laneConcurrency) {
+  const apiPlatforms = remainingPlatforms.filter(p => p.checkType === 'api');
+  const browserPlatforms = remainingPlatforms.filter(p => p.checkType === 'browser');
+  
+  // HTML platforms are further split into standard vs high risk for backwards compatibility and safety
+  const standardHtmlPlatforms = remainingPlatforms.filter(p => p.checkType !== 'api' && p.checkType !== 'browser' && !isHighRisk(p));
+  const highRiskHtmlPlatforms = remainingPlatforms.filter(p => p.checkType !== 'api' && p.checkType !== 'browser' && isHighRisk(p));
+
+  // 3. Execution Lane Engine
+  async function runLane(platformList: Platform[], laneConcurrency: number) {
+    if (platformList.length === 0) return;
+    
     let index = 0;
 
     async function worker() {
@@ -85,7 +125,7 @@ async function orchestrateScan(target, platforms, callbacks, options = {}) {
           continue;
         }
 
-        let result = null;
+        let result: ScanResult | null = null;
         let success = false;
         let attempt = 0;
 
@@ -97,14 +137,12 @@ async function orchestrateScan(target, platforms, callbacks, options = {}) {
             if (result.error === 'MISSING_SESSION_CREDENTIALS' || result.status === 'FOUND' || !result.error) {
               success = true;
             } else {
-              // Treated as transient platform error or WAF block
               attempt++;
               if (attempt <= retryAttempts && !isAborted()) {
                 await delay(retryBaseDelayMs * Math.pow(2, attempt - 1));
               }
             }
-          } catch (err) {
-            // Check if abort error
+          } catch (err: any) {
             if (isAborted()) break;
 
             attempt++;
@@ -173,10 +211,13 @@ async function orchestrateScan(target, platforms, callbacks, options = {}) {
     await Promise.all(workers);
   }
 
-  // Run both concurrency lanes concurrently
+  // Run all four concurrency lanes in parallel
+  // Order of scheduling guarantees standard HTML runs before high-risk for executionOrder testing
   await Promise.all([
-    runLane(standardPlatforms, maxConcurrency),
-    runLane(highRiskPlatforms, highRiskConcurrency)
+    runLane(apiPlatforms, apiConcurrency),
+    runLane(standardHtmlPlatforms, htmlConcurrency),
+    runLane(highRiskHtmlPlatforms, highRiskConcurrency),
+    runLane(browserPlatforms, browserConcurrency)
   ]);
 
   return {
@@ -184,5 +225,3 @@ async function orchestrateScan(target, platforms, callbacks, options = {}) {
     timeTakenMs: Date.now() - startTime
   };
 }
-
-module.exports = { orchestrateScan, circuitBreakers };

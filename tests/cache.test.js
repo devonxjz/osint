@@ -2,7 +2,7 @@
 
 'use strict';
 
-const { ResultCache } = require('../api/cache');
+const { ResultCache } = require('../dist-backend/shared');
 
 describe('ResultCache - Behavior 1: Basic Set/Get', () => {
   test('should store and retrieve a value by its key', () => {

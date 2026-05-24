@@ -3,8 +3,8 @@
 'use strict';
 
 require('dotenv').config();
-const { getAllPlatforms } = require('../dist-backend/registry');
-const { scanPlatform } = require('../dist-backend/scanner');
+const { getAllPlatforms } = require('../dist-backend/username');
+const { scanPlatform } = require('../dist-backend/username/scanner');
 
 const DUMMY_USERNAME = '__osint_nonexistent_user_998877_xyz__';
 

@@ -41,15 +41,13 @@ const dotenv = __importStar(require("dotenv"));
 dotenv.config();
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
-const analyzer_1 = require("./analyzer");
-const registry_1 = require("./registry");
-const sseManager_1 = require("./sseManager");
-const cache_1 = require("./cache");
-const orchestrator_1 = require("./orchestrator");
-const email_orchestrator_1 = require("./email/email_orchestrator");
-const pdf_generator_1 = require("./email/pdf_generator");
-const phone_orchestrator_1 = require("./phone/phone_orchestrator");
-const scanCache = new cache_1.ResultCache({
+const shared_1 = require("./shared");
+const username_1 = require("./username");
+const email_1 = require("./email");
+const phone_1 = require("./phone");
+const realname_1 = require("./realname");
+const domain_1 = require("./domain");
+const scanCache = new shared_1.ResultCache({
     maxSize: 1000,
     defaultTtlMs: 3600000 // 1 hour TTL
 });
@@ -62,14 +60,14 @@ app.use(express_1.default.json());
  * Exposes all platforms configurations dynamically
  */
 app.get('/api/platforms', (req, res) => {
-    res.json((0, registry_1.getAllPlatforms)());
+    res.json((0, username_1.getAllPlatforms)());
 });
 /**
  * GET /api/categories
  * Exposes all active registry categories dynamically
  */
 app.get('/api/categories', (req, res) => {
-    res.json((0, registry_1.getCategories)());
+    res.json((0, username_1.getCategories)());
 });
 /**
  * GET /api/session-status
@@ -100,7 +98,7 @@ app.get('/api/scan', async (req, res) => {
             // Ignore parsing errors gracefully
         }
     }
-    const sse = new sseManager_1.SSEStreamManager(res);
+    const sse = new shared_1.SSEStreamManager(res);
     sse.init();
     const abortController = new AbortController();
     req.on('close', () => {
@@ -109,7 +107,7 @@ app.get('/api/scan', async (req, res) => {
         console.log('Client closed connection. Aborting scan process.');
     });
     // 2. Validate and sanitize raw query target parameter
-    const analysis = (0, analyzer_1.analyzeInput)(target);
+    const analysis = (0, shared_1.analyzeInput)(target);
     if (!analysis.valid) {
         sse.send('error', { message: analysis.error || 'Invalid target format' });
         sse.end();
@@ -119,7 +117,7 @@ app.get('/api/scan', async (req, res) => {
     // A. EMAIL Target Scan
     if (analysis.type === 'EMAIL') {
         try {
-            const dossier = await (0, email_orchestrator_1.orchestrateEmailScan)(analysis.sanitized, {
+            const dossier = await (0, email_1.orchestrateEmailScan)(analysis.sanitized, {
                 onEvent: (event) => {
                     if (!abortController.signal.aborted) {
                         sse.send('result', event);
@@ -144,7 +142,7 @@ app.get('/api/scan', async (req, res) => {
     // B. PHONE Target Scan
     if (analysis.type === 'PHONE') {
         try {
-            const dossier = await (0, phone_orchestrator_1.orchestratePhoneScan)(analysis.sanitized, {
+            const dossier = await (0, phone_1.orchestratePhoneScan)(analysis.sanitized, {
                 onEvent: (event) => {
                     if (!abortController.signal.aborted) {
                         sse.send('result', event);
@@ -167,9 +165,8 @@ app.get('/api/scan', async (req, res) => {
     }
     // C. REAL_NAME Target Scan
     if (analysis.type === 'REAL_NAME') {
-        const { scanIdentity } = require('./identityEngine');
         try {
-            const dossier = await scanIdentity(analysis.sanitized, {
+            const dossier = await (0, realname_1.scanIdentity)(analysis.sanitized, {
                 deepScan: req.query.deep_scan === 'true',
                 cookies: cookieOverrides,
                 onResult: (result) => {
@@ -199,9 +196,8 @@ app.get('/api/scan', async (req, res) => {
     }
     // D. DOMAIN Target Scan
     if (analysis.type === 'DOMAIN') {
-        const { resolveDomainIntel } = require('./domainEngine');
         try {
-            const dossier = await resolveDomainIntel(analysis.sanitized, {
+            const dossier = await (0, domain_1.resolveDomainIntel)(analysis.sanitized, {
                 onResult: (result) => {
                     if (!abortController.signal.aborted) {
                         sse.send('result', result);
@@ -229,7 +225,7 @@ app.get('/api/scan', async (req, res) => {
     }
     // E. USERNAME Target Scan (Default Fallback)
     const resolvedCats = categories ? categories.split(',').map(c => c.trim()) : [];
-    const platforms = (0, registry_1.getPlatforms)(resolvedCats);
+    const platforms = (0, username_1.getPlatforms)(resolvedCats);
     if (platforms.length === 0) {
         sse.send('error', { message: 'No target platforms matched the selected categories.' });
         sse.end();
@@ -239,7 +235,7 @@ app.get('/api/scan', async (req, res) => {
     // Send initial progress
     sse.send('progress', { completed: 0, total, percentage: 0 });
     try {
-        const summary = await (0, orchestrator_1.orchestrateScan)(analysis.sanitized, platforms, {
+        const summary = await (0, username_1.orchestrateScan)(analysis.sanitized, platforms, {
             onResult: (result) => {
                 sse.send('result', result);
             },
@@ -279,7 +275,7 @@ app.get('/api/scan', async (req, res) => {
  */
 app.get('/api/scan-email', async (req, res) => {
     const target = req.query.target;
-    const sse = new sseManager_1.SSEStreamManager(res);
+    const sse = new shared_1.SSEStreamManager(res);
     sse.init();
     const abortController = new AbortController();
     req.on('close', () => {
@@ -292,7 +288,7 @@ app.get('/api/scan-email', async (req, res) => {
         return;
     }
     try {
-        const dossier = await (0, email_orchestrator_1.orchestrateEmailScan)(target.trim(), {
+        const dossier = await (0, email_1.orchestrateEmailScan)(target.trim(), {
             onEvent: (event) => {
                 if (!abortController.signal.aborted) {
                     sse.send('result', event);
@@ -319,7 +315,7 @@ app.get('/api/scan-email', async (req, res) => {
  */
 app.get('/api/scan-phone', async (req, res) => {
     const target = req.query.target;
-    const sse = new sseManager_1.SSEStreamManager(res);
+    const sse = new shared_1.SSEStreamManager(res);
     sse.init();
     const abortController = new AbortController();
     req.on('close', () => {
@@ -332,7 +328,7 @@ app.get('/api/scan-phone', async (req, res) => {
         return;
     }
     try {
-        const dossier = await (0, phone_orchestrator_1.orchestratePhoneScan)(target.trim(), {
+        const dossier = await (0, phone_1.orchestratePhoneScan)(target.trim(), {
             onEvent: (event) => {
                 if (!abortController.signal.aborted) {
                     sse.send('result', event);
@@ -362,7 +358,7 @@ app.post('/api/dossier', async (req, res) => {
         if (!dossier || (!dossier.email && !dossier.phone)) {
             return res.status(400).json({ error: 'Missing dossier data' });
         }
-        const pdfBuffer = await (0, pdf_generator_1.generateDossierPDF)(dossier);
+        const pdfBuffer = await (0, email_1.generateDossierPDF)(dossier);
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="dossier_${Date.now()}.pdf"`);
         res.send(pdfBuffer);

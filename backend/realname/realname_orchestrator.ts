@@ -1,9 +1,4 @@
-// backend/identityEngine.ts
-
-'use strict';
-
-import { scanPlatform, Platform, ScanResult } from './scanner';
-import { getAllPlatforms } from './registry';
+import { scanPlatform, getAllPlatforms } from '../username';
 
 // High-value subset of platforms to query for Real Name scans
 const HIGH_VALUE_PLATFORMS = new Set([

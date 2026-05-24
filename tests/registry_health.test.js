@@ -1,8 +1,8 @@
 'use strict';
 
 const cheerio = require('cheerio');
-const { getAllPlatforms } = require('../dist-backend/registry');
-const { scanPlatform } = require('../dist-backend/scanner');
+const { getAllPlatforms } = require('../dist-backend/username');
+const { scanPlatform } = require('../dist-backend/username/scanner');
 
 // Mock Axios natively to test our registry matching rule logic
 const axios = require('axios');

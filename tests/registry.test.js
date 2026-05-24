@@ -1,6 +1,6 @@
 'use strict';
 
-const { getPlatforms, getAllPlatforms, getCategories } = require('../dist-backend/registry');
+const { getPlatforms, getAllPlatforms, getCategories } = require('../dist-backend/username');
 const { benchmarkSync } = require('./utils/benchmark');
 
 describe('Platform Registry', () => {
@@ -173,7 +173,7 @@ describe('Platform Registry', () => {
 
     it('module loads under 5ms (indirectly tested by require speed)', () => {
       const start = performance.now();
-      require('../dist-backend/registry');
+      require('../dist-backend/username');
       const end = performance.now();
       expect(end - start).toBeLessThan(5.0);
     });

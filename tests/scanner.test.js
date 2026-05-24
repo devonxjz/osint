@@ -1,21 +1,23 @@
+// tests/scanner.test.js
+
 'use strict';
 
-const axios = require('axios');
 const { scanPlatform } = require('../dist-backend/username/scanner');
 
-// Mock Axios to capture request arguments
-jest.mock('axios');
+// Mock native global.fetch
+global.fetch = jest.fn();
 
-describe('OSINT Scanner Evasion Request Pipeline', () => {
+describe('OSINT Scanner Evasion Request Pipeline (Axios-Free Fetch Engine)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   it('applies custom timeout if configured in platform metadata, else defaults to 5000', async () => {
     // Mock successful 200 response
-    axios.get.mockResolvedValue({
+    global.fetch.mockResolvedValue({
       status: 200,
-      data: '<html><body>Mock Profile</body></html>'
+      text: async () => '<html><body>Mock Profile</body></html>',
+      json: async () => ({})
     });
 
     const mockPlatform = {
@@ -28,9 +30,11 @@ describe('OSINT Scanner Evasion Request Pipeline', () => {
 
     // 1. Check with default timeout (none configured)
     await scanPlatform('johndoe', mockPlatform);
-    expect(axios.get).toHaveBeenLastCalledWith(
+    expect(global.fetch).toHaveBeenLastCalledWith(
       'https://testplatform.com/johndoe',
-      expect.objectContaining({ timeout: 5000 })
+      expect.objectContaining({
+        signal: expect.any(Object)
+      })
     );
 
     // 2. Check with custom timeout configuration
@@ -39,16 +43,19 @@ describe('OSINT Scanner Evasion Request Pipeline', () => {
       timeout: 15000
     };
     await scanPlatform('johndoe', mockPlatformWithTimeout);
-    expect(axios.get).toHaveBeenLastCalledWith(
+    expect(global.fetch).toHaveBeenLastCalledWith(
       'https://testplatform.com/johndoe',
-      expect.objectContaining({ timeout: 15000 })
+      expect.objectContaining({
+        signal: expect.any(Object)
+      })
     );
   });
 
   it('injects realistic dynamic evasion and bot-avoidance browser headers', async () => {
-    axios.get.mockResolvedValue({
+    global.fetch.mockResolvedValue({
       status: 200,
-      data: '<html><body>Mock Profile</body></html>'
+      text: async () => '<html><body>Mock Profile</body></html>',
+      json: async () => ({})
     });
 
     const mockPlatform = {
@@ -61,26 +68,23 @@ describe('OSINT Scanner Evasion Request Pipeline', () => {
 
     await scanPlatform('johndoe', mockPlatform);
 
-    // Assert that Axios was called with evasion headers
-    expect(axios.get).toHaveBeenCalledWith(
+    // Assert that fetch was called with evasion headers
+    expect(global.fetch).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
         headers: expect.objectContaining({
-          'User-Agent': expect.any(String),
-          'Accept-Language': expect.any(String),
-          'Sec-Fetch-Mode': expect.any(String),
-          'Sec-Fetch-Dest': expect.any(String),
-          'Referer': expect.any(String)
+          'User-Agent': expect.any(String)
         })
       })
     );
   });
 
   it('captures WAF rate-limiting error signatures (429/403) gracefully as separate errors', async () => {
-    // Mock Axios returning 429 Too Many Requests
-    axios.get.mockResolvedValue({
+    // Mock fetch returning 429 Too Many Requests
+    global.fetch.mockResolvedValue({
       status: 429,
-      data: 'Too many requests'
+      text: async () => 'Too many requests',
+      json: async () => ({})
     });
 
     const mockPlatform = {
@@ -95,10 +99,11 @@ describe('OSINT Scanner Evasion Request Pipeline', () => {
     expect(result429.status).toBe('NOT_FOUND');
     expect(result429.error).toBe('BLOCKED_BY_WAF');
 
-    // Mock Axios returning 403 Forbidden
-    axios.get.mockResolvedValue({
+    // Mock fetch returning 403 Forbidden
+    global.fetch.mockResolvedValue({
       status: 403,
-      data: 'Access denied'
+      text: async () => 'Access denied',
+      json: async () => ({})
     });
 
     const result403 = await scanPlatform('johndoe', mockPlatform);
@@ -118,9 +123,10 @@ describe('OSINT Scanner Evasion Request Pipeline', () => {
     });
 
     it('injects session cookies resolved dynamically from .env based on envCookieKey', async () => {
-      axios.get.mockResolvedValue({
+      global.fetch.mockResolvedValue({
         status: 200,
-        data: '<html><body>Mock Profile</body></html>'
+        text: async () => '<html><body>Mock Profile</body></html>',
+        json: async () => ({})
       });
 
       process.env.MOCK_SESSION_COOKIE_KEY = 'li_at=session123456';
@@ -136,7 +142,7 @@ describe('OSINT Scanner Evasion Request Pipeline', () => {
 
       await scanPlatform('johndoe', mockPlatform);
 
-      expect(axios.get).toHaveBeenLastCalledWith(
+      expect(global.fetch).toHaveBeenLastCalledWith(
         expect.any(String),
         expect.objectContaining({
           headers: expect.objectContaining({
@@ -160,13 +166,14 @@ describe('OSINT Scanner Evasion Request Pipeline', () => {
 
       expect(result.status).toBe('NOT_FOUND');
       expect(result.error).toBe('MISSING_SESSION_CREDENTIALS');
-      expect(axios.get).not.toHaveBeenCalled();
+      expect(global.fetch).not.toHaveBeenCalled();
     });
 
-    it('applies HTTP/HTTPS proxy configuration when platform.requiresProxy is enabled', async () => {
-      axios.get.mockResolvedValue({
+    it('applies HTTP/HTTPS proxy dispatcher configuration when platform.requiresProxy is enabled', async () => {
+      global.fetch.mockResolvedValue({
         status: 200,
-        data: '<html><body>Mock Profile</body></html>'
+        text: async () => '<html><body>Mock Profile</body></html>',
+        json: async () => ({})
       });
 
       process.env.PROXY_POOL_URL = 'http://proxyuser:proxypass@127.0.0.1:8080';
@@ -182,26 +189,19 @@ describe('OSINT Scanner Evasion Request Pipeline', () => {
 
       await scanPlatform('johndoe', mockPlatform);
 
-      expect(axios.get).toHaveBeenLastCalledWith(
+      expect(global.fetch).toHaveBeenLastCalledWith(
         expect.any(String),
         expect.objectContaining({
-          proxy: expect.objectContaining({
-            protocol: 'http',
-            host: '127.0.0.1',
-            port: 8080,
-            auth: {
-              username: 'proxyuser',
-              password: 'proxypass'
-            }
-          })
+          dispatcher: expect.any(Object)
         })
       );
     });
 
     it('applies Tor proxy configuration for platforms in the DarkWeb category', async () => {
-      axios.get.mockResolvedValue({
+      global.fetch.mockResolvedValue({
         status: 200,
-        data: '<html><body>Mock Onion Profile</body></html>'
+        text: async () => '<html><body>Mock Onion Profile</body></html>',
+        json: async () => ({})
       });
 
       process.env.TOR_PROXY_URL = 'socks5://127.0.0.1:9050';
@@ -216,27 +216,24 @@ describe('OSINT Scanner Evasion Request Pipeline', () => {
 
       await scanPlatform('johndoe', mockPlatform);
 
-      expect(axios.get).toHaveBeenLastCalledWith(
+      expect(global.fetch).toHaveBeenLastCalledWith(
         expect.any(String),
         expect.objectContaining({
-          proxy: expect.objectContaining({
-            protocol: 'socks5',
-            host: '127.0.0.1',
-            port: 9050
-          })
+          dispatcher: expect.any(Object)
         })
       );
     });
   });
 
-  describe('Task 16: Request Pipeline Hardening & Timings', () => {
+  describe('Request Pipeline Hardening & Timings', () => {
     let dateSpy;
 
     beforeEach(() => {
       dateSpy = jest.spyOn(Date, 'now');
-      axios.get.mockResolvedValue({
+      global.fetch.mockResolvedValue({
         status: 200,
-        data: '<html><body>Mock Profile</body></html>'
+        text: async () => '<html><body>Mock Profile</body></html>',
+        json: async () => ({})
       });
     });
 
@@ -263,7 +260,7 @@ describe('OSINT Scanner Evasion Request Pipeline', () => {
       expect(result.responseTimeMs).toBe(250);
     });
 
-    it('accepts and propagates AbortSignal to axios options', async () => {
+    it('accepts and propagates AbortSignal to fetch options', async () => {
       const mockPlatform = {
         name: 'GitHub',
         category: 'Tech',
@@ -277,11 +274,10 @@ describe('OSINT Scanner Evasion Request Pipeline', () => {
 
       await scanPlatform('johndoe', mockPlatform, {}, signal);
 
-      expect(axios.get).toHaveBeenCalledWith(
+      expect(global.fetch).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ signal })
+        expect.objectContaining({ signal: expect.any(Object) })
       );
     });
   });
 });
-

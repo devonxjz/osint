@@ -14,6 +14,9 @@
 * **Identity Resolution (Name Scan)**: The process of mapping full names to candidate username variants and querying social platforms to aggregate digital footprint confidence scores (HIGH, MEDIUM, LOW).
 * **Phone Intelligence**: Dynamic E.164 phone validation, carrier prefix analysis, Caller ID parsing, and OTT profile resolution.
 * **Unified Scan Endpoint**: A consolidated EventSource route `/api/scan` that classifies the 5 target vectors and orchestrates all scans concurrently through a single Express handler.
+* **Polymorphic OSINT Engine**: A multi-tiered crawling architecture routing username targets across three dedicated scraping layers: API, HTML, and Browser (Playwright).
+* **Dynamic Concurrency Lanes**: Three separate, parallel execution queues (API, HTML, and Browser) protecting target system resources (capping Playwright at 2 threads) while maximizing unauthenticated API lanes to 30 threads.
+* **Hybrid Playwright Fallback**: The automatic mechanism that detects Vercel hosting (`process.env.VERCEL`) to bypass local browser rendering, downgrading to high-evasion Axios network queries to fit serverless environment limits.
 * **Abort Propagation**: The mechanism of forwarding `AbortSignal` down the entire OSINT engine execution chain; any `AbortError` must be handled silently (silent exit) without polluting logs or SSE streams.
 
 ## System Architecture

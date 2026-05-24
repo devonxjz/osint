@@ -1,6 +1,6 @@
 'use strict';
 
-const { generateDossierPDF } = require('../dist-backend/email/pdf_generator');
+const { generateDossierPDF } = require('../dist-backend/email');
 
 describe('PDF Dossier Generator', () => {
   const mockDossier = {

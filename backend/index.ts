@@ -7,16 +7,12 @@ dotenv.config();
 
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import { analyzeInput } from './analyzer';
-import { getPlatforms, getAllPlatforms, getCategories } from './registry';
-import { scanPlatform } from './scanner';
-import { SSEStreamManager } from './sseManager';
-import { ResultCache } from './cache';
-import { orchestrateScan } from './orchestrator';
-
-import { orchestrateEmailScan } from './email/email_orchestrator';
-import { generateDossierPDF } from './email/pdf_generator';
-import { orchestratePhoneScan } from './phone/phone_orchestrator';
+import { analyzeInput, SSEStreamManager, ResultCache } from './shared';
+import { orchestrateScan, getAllPlatforms, getPlatforms, getCategories } from './username';
+import { orchestrateEmailScan, generateDossierPDF } from './email';
+import { orchestratePhoneScan } from './phone';
+import { scanIdentity } from './realname';
+import { resolveDomainIntel } from './domain';
 
 const scanCache = new ResultCache({
   maxSize: 1000,
@@ -148,7 +144,6 @@ app.get('/api/scan', async (req: Request, res: Response): Promise<void> => {
 
   // C. REAL_NAME Target Scan
   if (analysis.type === 'REAL_NAME') {
-    const { scanIdentity } = require('./identityEngine');
     try {
       const dossier = await scanIdentity(
         analysis.sanitized,
@@ -184,7 +179,6 @@ app.get('/api/scan', async (req: Request, res: Response): Promise<void> => {
 
   // D. DOMAIN Target Scan
   if (analysis.type === 'DOMAIN') {
-    const { resolveDomainIntel } = require('./domainEngine');
     try {
       const dossier = await resolveDomainIntel(
         analysis.sanitized,

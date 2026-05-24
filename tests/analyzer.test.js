@@ -1,6 +1,6 @@
 'use strict';
 
-const { analyzeInput, ERRORS } = require('../dist-backend/analyzer');
+const { analyzeInput, ERRORS } = require('../dist-backend/shared');
 const { benchmarkSync } = require('./utils/benchmark');
 
 describe('analyzeInput()', () => {
@@ -214,7 +214,7 @@ describe('analyzeInput()', () => {
 
     it('module loads under 5ms (indirectly tested by require speed)', () => {
       const start = performance.now();
-      require('../dist-backend/analyzer');
+      require('../dist-backend/shared');
       const end = performance.now();
       expect(end - start).toBeLessThan(5.0);
     });

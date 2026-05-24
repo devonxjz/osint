@@ -2,12 +2,12 @@
 
 'use strict';
 
-const { orchestrateScan } = require('../dist-backend/orchestrator');
-const { scanPlatform } = require('../dist-backend/scanner');
-const { ResultCache } = require('../dist-backend/cache');
+const { orchestrateScan } = require('../dist-backend/username');
+const { scanPlatform } = require('../dist-backend/username/scanner');
+const { ResultCache } = require('../dist-backend/shared');
 
 // Mock scanPlatform
-jest.mock('../dist-backend/scanner');
+jest.mock('../dist-backend/username/scanner');
 
 describe('ScanOrchestrator - Behavior 1: Basic Scans (Tracer Bullet)', () => {
   beforeEach(() => {

@@ -2,7 +2,7 @@
 
 const axios = require('axios');
 const app = require('../dist-backend/index').default;
-const { orchestratePhoneScan } = require('../dist-backend/phone/phone_orchestrator');
+const { orchestratePhoneScan } = require('../dist-backend/phone');
 
 describe('Phone Scan Orchestrator Module', () => {
   let server;

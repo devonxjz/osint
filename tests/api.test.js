@@ -2,7 +2,7 @@ const app = require('../dist-backend/index').default;
 const axios = require('axios');
 
 // Mock scanner to avoid live outbound API calls in routing tests
-jest.mock('../dist-backend/scanner', () => ({
+jest.mock('../dist-backend/username/scanner', () => ({
   scanPlatform: jest.fn().mockResolvedValue({
     status: 'NOT_FOUND',
     platform: 'MockPlatform',
@@ -11,7 +11,7 @@ jest.mock('../dist-backend/scanner', () => ({
 }));
 
 // Mock domainEngine to avoid live crt.sh/dns outbound calls in routing tests
-jest.mock('../dist-backend/domainEngine', () => ({
+jest.mock('../dist-backend/domain/domain_orchestrator', () => ({
   resolveDomainIntel: jest.fn().mockResolvedValue({
     domain: 'mock.com',
     whois: { registrar: 'Mock Registrar', created: '2020-01-01', status: [], nameservers: [] },

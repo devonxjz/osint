@@ -13,7 +13,7 @@ describe('Platform Registry', () => {
   it('all platforms have required fields with correct types', () => {
     const REQUIRED = ['name', 'category', 'url', 'checkType', 'checkValue'];
     const ALLOWED_CATEGORIES = ['Social', 'Tech', 'Gaming', 'Media', 'Regional', 'Privacy', 'DarkWeb'];
-    const ALLOWED_CHECK_TYPES = ['status', 'text', 'selector'];
+    const ALLOWED_CHECK_TYPES = ['status', 'text', 'selector', 'api', 'browser'];
 
     all.forEach(p => {
       // 1. Check all required fields are present
@@ -28,6 +28,8 @@ describe('Platform Registry', () => {
       // 4. Validate checkValue type depending on checkType
       if (p.checkType === 'status') {
         expect(typeof p.checkValue).toBe('number');
+      } else if (p.checkType === 'api' || p.checkType === 'browser') {
+        expect(['string', 'number']).toContain(typeof p.checkValue);
       } else {
         expect(typeof p.checkValue).toBe('string');
       }

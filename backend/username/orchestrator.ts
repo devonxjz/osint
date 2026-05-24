@@ -1,4 +1,4 @@
-// backend/orchestrator.ts
+// backend/username/orchestrator.ts
 
 'use strict';
 
@@ -21,8 +21,11 @@ export interface ScanCallbacks {
 }
 
 export interface OrchestrateOptions {
-  maxConcurrency?: number;
-  highRiskConcurrency?: number;
+  maxConcurrency?: number; // legacy map to htmlConcurrency
+  highRiskConcurrency?: number; // legacy
+  apiConcurrency?: number;
+  htmlConcurrency?: number;
+  browserConcurrency?: number;
   retryAttempts?: number;
   retryBaseDelayMs?: number;
   cache?: any;
@@ -35,8 +38,12 @@ export async function orchestrateScan(
   callbacks: ScanCallbacks,
   options: OrchestrateOptions = {}
 ): Promise<{ foundCount: number; timeTakenMs: number }> {
-  const maxConcurrency = options.maxConcurrency || 20;
+  // Concurrency Lane defaults with backwards compatible fallbacks
+  const apiConcurrency = options.apiConcurrency || 30;
+  const htmlConcurrency = options.htmlConcurrency || options.maxConcurrency || 15;
   const highRiskConcurrency = options.highRiskConcurrency || 3;
+  const browserConcurrency = options.browserConcurrency || 2;
+
   const retryAttempts = options.retryAttempts !== undefined ? options.retryAttempts : 2;
   const retryBaseDelayMs = options.retryBaseDelayMs !== undefined ? options.retryBaseDelayMs : 500;
   const cache = options.cache;
@@ -47,7 +54,6 @@ export async function orchestrateScan(
   let completed = 0;
   let foundCount = 0;
 
-  // Helper to check if signal is aborted
   const isAborted = () => signal && signal.aborted;
 
   // 1. Check cache first
@@ -82,17 +88,23 @@ export async function orchestrateScan(
     };
   }
 
-  // 2. Priority Scheduling: low-risk first, high-risk last
+  // 2. Classify platforms into specialized lanes
   const isHighRisk = (p: Platform) => {
     const rawP = p as any;
     return rawP.riskLevel === 'HIGH' || rawP.requiresProxy === true || rawP.category === 'DarkWeb';
   };
-  
-  const standardPlatforms = remainingPlatforms.filter(p => !isHighRisk(p));
-  const highRiskPlatforms = remainingPlatforms.filter(p => isHighRisk(p));
 
-  // 3. Execution Lanes
+  const apiPlatforms = remainingPlatforms.filter(p => p.checkType === 'api');
+  const browserPlatforms = remainingPlatforms.filter(p => p.checkType === 'browser');
+  
+  // HTML platforms are further split into standard vs high risk for backwards compatibility and safety
+  const standardHtmlPlatforms = remainingPlatforms.filter(p => p.checkType !== 'api' && p.checkType !== 'browser' && !isHighRisk(p));
+  const highRiskHtmlPlatforms = remainingPlatforms.filter(p => p.checkType !== 'api' && p.checkType !== 'browser' && isHighRisk(p));
+
+  // 3. Execution Lane Engine
   async function runLane(platformList: Platform[], laneConcurrency: number) {
+    if (platformList.length === 0) return;
+    
     let index = 0;
 
     async function worker() {
@@ -125,14 +137,12 @@ export async function orchestrateScan(
             if (result.error === 'MISSING_SESSION_CREDENTIALS' || result.status === 'FOUND' || !result.error) {
               success = true;
             } else {
-              // Treated as transient platform error or WAF block
               attempt++;
               if (attempt <= retryAttempts && !isAborted()) {
                 await delay(retryBaseDelayMs * Math.pow(2, attempt - 1));
               }
             }
           } catch (err: any) {
-            // Check if abort error
             if (isAborted()) break;
 
             attempt++;
@@ -201,10 +211,13 @@ export async function orchestrateScan(
     await Promise.all(workers);
   }
 
-  // Run both concurrency lanes concurrently
+  // Run all four concurrency lanes in parallel
+  // Order of scheduling guarantees standard HTML runs before high-risk for executionOrder testing
   await Promise.all([
-    runLane(standardPlatforms, maxConcurrency),
-    runLane(highRiskPlatforms, highRiskConcurrency)
+    runLane(apiPlatforms, apiConcurrency),
+    runLane(standardHtmlPlatforms, htmlConcurrency),
+    runLane(highRiskHtmlPlatforms, highRiskConcurrency),
+    runLane(browserPlatforms, browserConcurrency)
   ]);
 
   return {

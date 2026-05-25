@@ -254,7 +254,8 @@ app.get('/api/scan', async (req, res) => {
             maxConcurrency: 20,
             highRiskConcurrency: 3,
             cache: scanCache,
-            signal: abortController.signal
+            signal: abortController.signal,
+            cookies: cookieOverrides
         });
         if (!abortController.signal.aborted) {
             sse.send('end', { summary });

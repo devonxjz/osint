@@ -43,40 +43,80 @@ class BrowserEngine {
         // Hybrid Production Fallback for Vercel Serverless environment
         if (process.env.VERCEL) {
             console.log(`[BrowserEngine] Vercel detected. Gracefully falling back to HtmlEngine for ${platform.name}`);
-            return htmlEngine_1.htmlEngine.scan(username, platform, options);
+            const result = await htmlEngine_1.htmlEngine.scan(username, platform, options);
+            return {
+                ...result,
+                confidence: 'LOW',
+                method: 'fallback',
+                fallbackReason: 'vercel_env'
+            };
         }
         const startTime = Date.now();
         const signal = options.signal || null;
-        // Dynamically import Playwright only when running locally to avoid load errors
-        let playwrightChromium;
-        try {
-            const playwright = require('playwright');
-            playwrightChromium = playwright.chromium;
-        }
-        catch (e) {
-            console.error('[BrowserEngine] Playwright is not available, falling back to HtmlEngine', e);
-            return htmlEngine_1.htmlEngine.scan(username, platform, options);
-        }
         let browser = null;
+        let context = options.sharedContext || null;
+        let page = null;
         try {
-            // Launch headless browser with high-evasion arguments
-            browser = await playwrightChromium.launch({
-                headless: true,
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-blink-features=AutomationControlled'
-                ]
-            });
-            const userAgent = (0, htmlEngine_1.getRandomUserAgent)();
-            const context = await browser.newContext({
-                userAgent,
-                locale: 'en-US',
-                viewport: { width: 1280, height: 720 },
-                deviceScaleFactor: 1,
-                isMobile: false,
-                hasTouch: false
-            });
+            if (!context) {
+                // Dynamically import Playwright only when running locally to avoid load errors
+                let playwrightChromium;
+                try {
+                    const playwright = require('playwright');
+                    playwrightChromium = playwright.chromium;
+                }
+                catch (e) {
+                    console.error('[BrowserEngine] Playwright is not available, falling back to HtmlEngine', e);
+                    const result = await htmlEngine_1.htmlEngine.scan(username, platform, options);
+                    return {
+                        ...result,
+                        confidence: 'LOW',
+                        method: 'fallback',
+                        fallbackReason: 'binary_missing'
+                    };
+                }
+                // Launch headless browser with high-evasion arguments
+                browser = await playwrightChromium.launch({
+                    headless: true,
+                    args: [
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-blink-features=AutomationControlled'
+                    ]
+                });
+                const userAgent = (0, htmlEngine_1.getRandomUserAgent)();
+                context = await browser.newContext({
+                    userAgent,
+                    locale: 'en-US',
+                    viewport: { width: 1280, height: 720 },
+                    deviceScaleFactor: 1,
+                    isMobile: false,
+                    hasTouch: false
+                });
+                // Inject standard stealth properties inside context before scan starts (navigator.webdriver = false, WebGL, Canvas)
+                const sessionSeed = Math.floor(Math.random() * 256);
+                await context.addInitScript((seed) => {
+                    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+                    // WebGL spoofing
+                    const getParameter = WebGLRenderingContext.prototype.getParameter;
+                    WebGLRenderingContext.prototype.getParameter = function (parameter) {
+                        if (parameter === 37445)
+                            return 'Intel Inc.'; // UNMASKED_VENDOR_WEBGL
+                        if (parameter === 37446)
+                            return 'Intel(R) Iris(TM) Plus Graphics 640'; // UNMASKED_RENDERER_WEBGL
+                        return getParameter.apply(this, [parameter]);
+                    };
+                    // Canvas math noise spoofing
+                    const getImageData = CanvasRenderingContext2D.prototype.getImageData;
+                    CanvasRenderingContext2D.prototype.getImageData = function (x, y, w, h) {
+                        const imageData = getImageData.apply(this, [x, y, w, h]);
+                        for (let i = 0; i < imageData.data.length; i += 4) {
+                            const offset = (seed + i + Math.floor(Math.random() * 3)) % 3;
+                            imageData.data[i] = (imageData.data[i] + offset) % 256;
+                        }
+                        return imageData;
+                    };
+                }, sessionSeed);
+            }
             // Secure Session Cookie injection if present
             const cookieOverrides = options.cookieOverrides || {};
             let cookie = undefined;
@@ -97,7 +137,7 @@ class BrowserEngine {
                     await context.addCookies(cookiesList);
                 }
             }
-            const page = await context.newPage();
+            page = await context.newPage();
             // Monitor AbortSignal to close page and browser immediately on client disconnect
             if (signal) {
                 if (signal.aborted) {
@@ -105,6 +145,8 @@ class BrowserEngine {
                 }
                 signal.addEventListener('abort', async () => {
                     try {
+                        if (page && !page.isClosed())
+                            await page.close();
                         if (browser)
                             await browser.close();
                     }
@@ -196,6 +238,14 @@ class BrowserEngine {
         }
         finally {
             // Complete resource cleanup is mandatory
+            if (page && !page.isClosed()) {
+                try {
+                    await page.close();
+                }
+                catch (e) {
+                    // ignore
+                }
+            }
             if (browser) {
                 try {
                     await browser.close();

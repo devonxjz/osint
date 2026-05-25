@@ -39,6 +39,8 @@ exports.getRandomUserAgent = getRandomUserAgent;
 exports.extractMetadata = extractMetadata;
 const cheerio = __importStar(require("cheerio"));
 const undici_1 = require("undici");
+const evasionClient_1 = require("./evasionClient");
+const evasionClient = new evasionClient_1.EvasionClient();
 const USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -109,21 +111,33 @@ class HtmlEngine {
         }
         try {
             const headers = {
-                'User-Agent': userAgent
+                'sec-ch-ua': '"Not A(Brand";v="99", "Google Chrome";v="121"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"',
+                'upgrade-insecure-requests': '1',
+                'User-Agent': userAgent,
+                'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'sec-fetch-site': 'none',
+                'sec-fetch-mode': 'navigate',
+                'sec-fetch-user': '?1',
+                'sec-fetch-dest': 'document',
+                'accept-encoding': 'gzip, deflate, br',
+                'accept-language': 'en-US,en;q=0.9',
             };
             if (cookie) {
                 headers['Cookie'] = cookie;
             }
             // Native ProxyAgent configuration via Undici
             let dispatcher = undefined;
-            if (platform.requiresProxy && process.env.PROXY_POOL_URL) {
-                dispatcher = new undici_1.ProxyAgent(process.env.PROXY_POOL_URL);
+            const proxyUrl = options.proxyUrl || (platform.requiresProxy ? process.env.PROXY_POOL_URL : undefined);
+            if (proxyUrl) {
+                dispatcher = new undici_1.ProxyAgent(proxyUrl);
             }
             else if (platform.category === 'DarkWeb') {
                 const torProxy = process.env.TOR_PROXY_URL || 'socks5://127.0.0.1:9050';
                 dispatcher = new undici_1.ProxyAgent(torProxy);
             }
-            const response = await fetch(targetUrl, {
+            const response = await evasionClient.request(targetUrl, {
                 headers,
                 signal: controller.signal,
                 dispatcher
@@ -140,7 +154,14 @@ class HtmlEngine {
                     responseTimeMs
                 };
             }
-            const html = await response.text();
+            // Soft 404 Redirect Detection (e.g. MeWe redirects non-existent users to mewe.com/404 with 200 OK status)
+            if (response.url && (response.url.endsWith('/404') ||
+                response.url.includes('/404') ||
+                response.url.includes('/error/404') ||
+                response.url.endsWith('/error'))) {
+                return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
+            }
+            const html = response.body;
             if (typeof html === 'string') {
                 const lowerHtml = html.toLowerCase();
                 const GLOBAL_HTML_BLACKLIST = [

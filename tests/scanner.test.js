@@ -2,10 +2,24 @@
 
 'use strict';
 
-const { scanPlatform } = require('../dist-backend/username/scanner');
+const { EvasionClient } = require('../dist-backend/username/engines/evasionClient');
 
-// Mock native global.fetch
+// Mock EvasionClient to delegate to global.fetch for backward compatibility
+const mockRequest = jest.fn().mockImplementation(async (url, options) => {
+  const mockRes = await global.fetch(url, options);
+  return {
+    status: mockRes.status,
+    body: typeof mockRes.text === 'function' ? await mockRes.text() : mockRes.body,
+    headers: mockRes.headers || {},
+    url
+  };
+});
+EvasionClient.prototype.request = mockRequest;
+
+// Keep global.fetch as a Jest spy so all existing mock assertions pass seamlessly
 global.fetch = jest.fn();
+
+const { scanPlatform } = require('../dist-backend/username/scanner');
 
 describe('OSINT Scanner Evasion Request Pipeline (Axios-Free Fetch Engine)', () => {
   beforeEach(() => {

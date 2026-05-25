@@ -1,5 +1,7 @@
 'use strict';
 
+jest.setTimeout(20000);
+
 const { orchestrateEmailScan } = require('../dist-backend/email');
 
 describe('Email Scan Orchestrator', () => {

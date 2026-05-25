@@ -93,7 +93,7 @@ describe('ScanOrchestrator - Behavior 2: Cache Integration', () => {
     await orchestrateScan('testuser', platforms, callbacks, { cache });
 
     expect(scanPlatform).toHaveBeenCalledTimes(1);
-    expect(scanPlatform).toHaveBeenCalledWith('testuser', expect.objectContaining({ name: 'GitLab' }), expect.any(Object), undefined);
+    expect(scanPlatform).toHaveBeenCalledWith('testuser', expect.objectContaining({ name: 'GitLab' }), expect.any(Object), undefined, expect.any(Object));
 
     expect(results).toHaveLength(2);
     const gitHubRes = results.find(r => r.platform === 'GitHub');

@@ -6,7 +6,7 @@ export interface PlatformConfig {
   name: string;
   category: string;
   url: string;
-  checkType: 'status' | 'text' | 'selector' | 'api' | 'browser';
+  checkType: 'status' | 'text' | 'selector' | 'api' | 'browser' | 'impersonate';
   checkValue: any;
   requiresProxy?: boolean;
   envCookieKey?: string;

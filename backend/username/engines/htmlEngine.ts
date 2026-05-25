@@ -7,6 +7,9 @@ import { ProxyAgent } from 'undici';
 import { BaseEngine, EngineScanOptions } from './base';
 import { PlatformConfig } from '../registry';
 import { ScanResult } from '../scanner';
+import { EvasionClient } from './evasionClient';
+
+const evasionClient = new EvasionClient();
 
 const USER_AGENTS = [
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -94,7 +97,18 @@ export class HtmlEngine implements BaseEngine {
 
     try {
       const headers: Record<string, string> = { 
-        'User-Agent': userAgent
+        'sec-ch-ua': '"Not A(Brand";v="99", "Google Chrome";v="121"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'upgrade-insecure-requests': '1',
+        'User-Agent': userAgent,
+        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'sec-fetch-site': 'none',
+        'sec-fetch-mode': 'navigate',
+        'sec-fetch-user': '?1',
+        'sec-fetch-dest': 'document',
+        'accept-encoding': 'gzip, deflate, br',
+        'accept-language': 'en-US,en;q=0.9',
       };
 
       if (cookie) {
@@ -103,18 +117,19 @@ export class HtmlEngine implements BaseEngine {
 
       // Native ProxyAgent configuration via Undici
       let dispatcher: any = undefined;
-      if (platform.requiresProxy && process.env.PROXY_POOL_URL) {
-        dispatcher = new ProxyAgent(process.env.PROXY_POOL_URL);
+      const proxyUrl = options.proxyUrl || (platform.requiresProxy ? process.env.PROXY_POOL_URL : undefined);
+      if (proxyUrl) {
+        dispatcher = new ProxyAgent(proxyUrl);
       } else if (platform.category === 'DarkWeb') {
         const torProxy = process.env.TOR_PROXY_URL || 'socks5://127.0.0.1:9050';
         dispatcher = new ProxyAgent(torProxy);
       }
 
-      const response = await fetch(targetUrl, {
+      const response = await evasionClient.request(targetUrl, {
         headers,
         signal: controller.signal,
         dispatcher
-      } as any);
+      });
       clearTimeout(timeoutId);
 
       const responseTimeMs = Date.now() - startTime;
@@ -130,7 +145,17 @@ export class HtmlEngine implements BaseEngine {
         };
       }
 
-      const html = await response.text();
+      // Soft 404 Redirect Detection (e.g. MeWe redirects non-existent users to mewe.com/404 with 200 OK status)
+      if (response.url && (
+        response.url.endsWith('/404') || 
+        response.url.includes('/404') || 
+        response.url.includes('/error/404') ||
+        response.url.endsWith('/error')
+      )) {
+        return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
+      }
+
+      const html = response.body;
 
       if (typeof html === 'string') {
         const lowerHtml = html.toLowerCase();

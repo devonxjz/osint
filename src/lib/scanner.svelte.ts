@@ -16,6 +16,8 @@ export interface ScanResult {
   bio?: string | null;
   location?: string | null;
   error?: string | null;
+  confidence?: 'HIGH' | 'LOW';
+  method?: string;
 }
 
 export interface Breach {

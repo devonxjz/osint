@@ -249,7 +249,8 @@ app.get('/api/scan', async (req: Request, res: Response): Promise<void> => {
         maxConcurrency: 20,
         highRiskConcurrency: 3,
         cache: scanCache,
-        signal: abortController.signal
+        signal: abortController.signal,
+        cookies: cookieOverrides
       }
     );
 

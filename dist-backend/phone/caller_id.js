@@ -1,12 +1,9 @@
 // backend/phone/caller_id.ts
 'use strict';
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getDeterministicProfile = getDeterministicProfile;
 exports.lookupCallerID = lookupCallerID;
-const axios_1 = __importDefault(require("axios"));
+const http_factory_1 = require("../shared/http_factory");
 const validator_1 = require("./validator");
 /**
  * Generates consistent, deterministic mock profiles based on a seed hash of the phone number.
@@ -57,13 +54,19 @@ async function lookupCallerID(phone, options = {}) {
     if (sid && token) {
         try {
             const url = `https://lookups.twilio.com/v2/PhoneNumbers/${encodeURIComponent(cleanPhone)}?Fields=line_type_intelligence,caller_name`;
-            const response = await axios_1.default.get(url, {
-                auth: {
-                    username: sid,
-                    password: token
+            const authHeader = 'Basic ' + Buffer.from(`${sid}:${token}`).toString('base64');
+            const response = await http_factory_1.HttpFactory.fetchWithSession(url, {
+                headers: {
+                    'Authorization': authHeader
                 }
-            });
-            const data = response.data || {};
+            }, options.session);
+            let data = {};
+            try {
+                data = JSON.parse(response.body);
+            }
+            catch (e) {
+                // ignore
+            }
             const twilioName = data.caller_name ? data.caller_name.caller_name : null;
             // Handle carrier intelligence
             if (data.line_type_intelligence && data.line_type_intelligence.carrier_name) {

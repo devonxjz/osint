@@ -109,7 +109,7 @@ async function scanIdentity(realName, options = {}, signal = null) {
             if (signal && signal.aborted)
                 break;
             try {
-                const result = await (0, username_1.scanPlatform)(variant, platform, options.cookies, signal);
+                const result = await (0, username_1.scanPlatform)(variant, platform, options.cookies, signal, { session: options.session });
                 if (result.status === 'FOUND') {
                     const matched = { variant, ...result };
                     if (options.onResult) {

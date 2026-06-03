@@ -7,7 +7,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.computeGravatarHash = computeGravatarHash;
 exports.lookupGravatar = lookupGravatar;
 const crypto_1 = __importDefault(require("crypto"));
-const axios_1 = __importDefault(require("axios"));
+const http_factory_1 = require("../shared/http_factory");
 /**
  * Computes Gravatar-compatible MD5 hash.
  * Per PRD Module 4: email must be trim() + toLowerCase() before hashing.
@@ -32,7 +32,7 @@ function computeGravatarHash(email) {
  * @param email
  * @returns GravatarResult
  */
-async function lookupGravatar(email) {
+async function lookupGravatar(email, session) {
     const hash = computeGravatarHash(email);
     const result = {
         hash,
@@ -45,11 +45,10 @@ async function lookupGravatar(email) {
     };
     try {
         // Step 1: Check avatar existence
-        const avatarResponse = await axios_1.default.get(`https://www.gravatar.com/avatar/${hash}?d=404`, {
-            validateStatus: () => true,
-            timeout: 5000,
-            responseType: 'arraybuffer', // Don't parse image as text
-        });
+        const avatarResponse = await http_factory_1.HttpFactory.fetchWithSession(`https://www.gravatar.com/avatar/${hash}?d=404`, {
+            responseType: 'buffer',
+            signal: AbortSignal.timeout(5000)
+        }, session);
         if (avatarResponse.status !== 200) {
             return result;
         }
@@ -57,16 +56,24 @@ async function lookupGravatar(email) {
         result.avatarUrl = `https://www.gravatar.com/avatar/${hash}?s=200`;
         // Step 2: Fetch extended profile JSON
         try {
-            const profileResponse = await axios_1.default.get(`https://www.gravatar.com/${hash}.json`, {
-                validateStatus: () => true,
-                timeout: 5000,
-            });
-            if (profileResponse.status === 200 && profileResponse.data && profileResponse.data.entry) {
-                const entry = profileResponse.data.entry[0];
-                result.displayName = entry.displayName || entry.preferredUsername || null;
-                result.aboutMe = entry.aboutMe || null;
-                result.location = entry.currentLocation || null;
-                result.profileUrls = (entry.urls || []).map((u) => u.value);
+            const profileResponse = await http_factory_1.HttpFactory.fetchWithSession(`https://www.gravatar.com/${hash}.json`, {
+                signal: AbortSignal.timeout(5000)
+            }, session);
+            if (profileResponse.status === 200) {
+                let profileData = null;
+                try {
+                    profileData = JSON.parse(profileResponse.body);
+                }
+                catch (e) {
+                    // ignore
+                }
+                if (profileData && profileData.entry) {
+                    const entry = profileData.entry[0];
+                    result.displayName = entry.displayName || entry.preferredUsername || null;
+                    result.aboutMe = entry.aboutMe || null;
+                    result.location = entry.currentLocation || null;
+                    result.profileUrls = (entry.urls || []).map((u) => u.value);
+                }
             }
         }
         catch {

@@ -1,20 +1,53 @@
 // backend/domainEngine.ts
 'use strict';
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.syncCloudflareIps = syncCloudflareIps;
 exports.isCloudflareIp = isCloudflareIp;
 exports.detectWildcardDns = detectWildcardDns;
 exports.resolveDomainIntel = resolveDomainIntel;
 const dns_1 = require("dns");
-const axios_1 = __importDefault(require("axios"));
+const http_factory_1 = require("../shared/http_factory");
+async function getHelper(url, options = {}) {
+    const { timeout = 5000, headers = {}, signal, responseType = 'json', session } = options;
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    if (signal) {
+        signal.addEventListener('abort', () => {
+            clearTimeout(id);
+            controller.abort();
+        });
+    }
+    try {
+        const res = await http_factory_1.HttpFactory.fetchWithSession(url, {
+            method: 'GET',
+            headers,
+            signal: controller.signal,
+            responseType: responseType === 'arraybuffer' ? 'buffer' : 'text'
+        }, session);
+        let data = res.body;
+        if (responseType === 'json' && typeof data === 'string') {
+            try {
+                data = JSON.parse(data);
+            }
+            catch (e) {
+                // Keep raw text if JSON parsing fails
+            }
+        }
+        return {
+            data,
+            status: res.status,
+            headers: res.headers
+        };
+    }
+    finally {
+        clearTimeout(id);
+    }
+}
 /**
  * Queries Shodan for IP details (open ports, ISP, Org, OS, Location).
  * Falls back to high-fidelity mock data if no key is present or on API failure.
  */
-async function queryShodanIp(ip, signal) {
+async function queryShodanIp(ip, session, signal) {
     const apiKey = process.env.SHODAN_API_KEY || '';
     if (!apiKey) {
         // Generate high-fidelity realistic Shodan intel fallback for demonstration/development
@@ -37,9 +70,11 @@ async function queryShodanIp(ip, signal) {
         };
     }
     try {
-        const res = await axios_1.default.get(`https://api.shodan.io/shodan/host/${ip}?key=${apiKey}`, {
+        const res = await getHelper(`https://api.shodan.io/shodan/host/${ip}?key=${apiKey}`, {
             timeout: 4000,
-            signal: signal || undefined
+            signal: signal || undefined,
+            responseType: 'json',
+            session
         });
         return {
             ports: res.data.ports || [80, 443],
@@ -89,7 +124,7 @@ let CLOUDFLARE_IP_RANGES = [
  */
 async function syncCloudflareIps() {
     try {
-        const response = await axios_1.default.get('https://www.cloudflare.com/ips-v4', { timeout: 3000 });
+        const response = await getHelper('https://www.cloudflare.com/ips-v4', { timeout: 3000, responseType: 'text' });
         if (response.data && typeof response.data === 'string') {
             const ranges = response.data
                 .split('\n')
@@ -153,13 +188,15 @@ async function detectWildcardDns(domain) {
 /**
  * Performs HTTPS-based WHOIS resolution using bootstrap endpoints (No Port 43 TCP).
  */
-async function fetchWhoisRdap(domain, signal) {
+async function fetchWhoisRdap(domain, session, signal) {
     // Primary attempt: RDAP HTTPS
     try {
-        const response = await axios_1.default.get(`https://rdap.org/domain/${domain}`, {
+        const response = await getHelper(`https://rdap.org/domain/${domain}`, {
             timeout: 4000,
             headers: { 'Accept': 'application/json' },
-            signal: signal || undefined
+            signal: signal || undefined,
+            responseType: 'json',
+            session
         });
         if (response.data) {
             return {
@@ -172,15 +209,17 @@ async function fetchWhoisRdap(domain, signal) {
         }
     }
     catch (err) {
-        if (err.name === 'AbortError' || axios_1.default.isCancel(err))
+        if (err.name === 'AbortError')
             throw err;
     }
     // Fallback attempt: Bootstrap or secondary HTTPS endpoint
     try {
-        const response = await axios_1.default.get(`https://rdap-bootstrap.arin.net/bootstrap/rdap/domain/${domain}`, {
+        const response = await getHelper(`https://rdap-bootstrap.arin.net/bootstrap/rdap/domain/${domain}`, {
             timeout: 4000,
             headers: { 'Accept': 'application/json' },
-            signal: signal || undefined
+            signal: signal || undefined,
+            responseType: 'json',
+            session
         });
         if (response.data) {
             return {
@@ -193,7 +232,7 @@ async function fetchWhoisRdap(domain, signal) {
         }
     }
     catch (err) {
-        if (err.name === 'AbortError' || axios_1.default.isCancel(err))
+        if (err.name === 'AbortError')
             throw err;
     }
     return {
@@ -253,14 +292,16 @@ function extractWhoisRegistrant(rdapData) {
 /**
  * Scrapes Google Analytics and Adsense trackers as well as outbound social media links.
  */
-async function scrapeLivePage(domain) {
+async function scrapeLivePage(domain, session) {
     const result = { trackers: [], socials: [] };
     try {
-        const response = await axios_1.default.get(`http://${domain}`, {
+        const response = await getHelper(`http://${domain}`, {
             timeout: 2500,
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            }
+            },
+            responseType: 'text',
+            session
         });
         if (response.data && typeof response.data === 'string') {
             const html = response.data;
@@ -310,14 +351,16 @@ async function scrapeLivePage(domain) {
 /**
  * Scrapes robots.txt for disallow directories up to 5 exclusions.
  */
-async function fetchRobotsTxt(domain) {
+async function fetchRobotsTxt(domain, session) {
     const result = { hiddenPages: [] };
     try {
-        const response = await axios_1.default.get(`http://${domain}/robots.txt`, {
+        const response = await getHelper(`http://${domain}/robots.txt`, {
             timeout: 2500,
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            }
+            },
+            responseType: 'text',
+            session
         });
         if (response.data && typeof response.data === 'string') {
             const lines = response.data.split('\n');
@@ -342,15 +385,17 @@ async function fetchRobotsTxt(domain) {
 /**
  * Queries the public Wayback machine CDX index for 3 historical snapshots.
  */
-async function fetchWaybackHistory(domain) {
+async function fetchWaybackHistory(domain, session) {
     const result = { history: [] };
     try {
-        const response = await axios_1.default.get(`https://web.archive.org/cdx/search/cdx?url=${domain}&output=json&limit=5`, {
-            timeout: 2500
+        const response = await getHelper(`https://web.archive.org/cdx/search/cdx?url=${domain}&output=json&limit=5`, {
+            timeout: 2500,
+            responseType: 'json',
+            session
         });
         if (Array.isArray(response.data) && response.data.length > 1) {
             const rows = response.data.slice(1);
-            const timestamps = rows.map(r => r[1]);
+            const timestamps = rows.map((r) => r[1]);
             result.history = timestamps.map((ts) => {
                 const yr = ts.substring(0, 4);
                 const mo = ts.substring(4, 6);
@@ -368,7 +413,7 @@ const DOCUMENT_CACHE = new Map();
 /**
  * DuckDuckGo document discovery & range metadata extraction.
  */
-async function fetchExposedDocuments(domain) {
+async function fetchExposedDocuments(domain, session) {
     if (DOCUMENT_CACHE.has(domain)) {
         return DOCUMENT_CACHE.get(domain);
     }
@@ -377,11 +422,13 @@ async function fetchExposedDocuments(domain) {
     try {
         const query = encodeURIComponent(`site:${domain} filetype:pdf OR filetype:docx`);
         const searchUrl = `https://html.duckduckgo.com/html/?q=${query}`;
-        const response = await axios_1.default.get(searchUrl, {
+        const response = await getHelper(searchUrl, {
             timeout: 2500,
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            }
+            },
+            responseType: 'text',
+            session
         });
         if (response.data && typeof response.data === 'string') {
             const html = response.data;
@@ -415,13 +462,14 @@ async function fetchExposedDocuments(domain) {
             metadataExtracted: false
         };
         try {
-            const fileRes = await axios_1.default.get(url, {
+            const fileRes = await getHelper(url, {
                 timeout: 2000,
                 headers: {
                     'Range': 'bytes=0-49151',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 },
-                responseType: 'arraybuffer'
+                responseType: 'arraybuffer',
+                session
             });
             if (fileRes.data) {
                 const buffer = Buffer.from(fileRes.data);
@@ -471,7 +519,7 @@ async function fetchExposedDocuments(domain) {
  * Orchestrates a complete Domain Intelligence Scan.
  */
 async function resolveDomainIntel(domain, options = {}, signal = null) {
-    const { onResult, onProgress } = options;
+    const { onResult, onProgress, session } = options;
     const graph = {
         nodes: [],
         edges: []
@@ -495,7 +543,7 @@ async function resolveDomainIntel(domain, options = {}, signal = null) {
     // 2. Fetch WHOIS metadata
     let whois = null;
     try {
-        whois = await fetchWhoisRdap(domain, signal);
+        whois = await fetchWhoisRdap(domain, session, signal);
         if (whois && whois.rawRdap) {
             const registrant = extractWhoisRegistrant(whois.rawRdap);
             if (registrant.name) {
@@ -539,19 +587,21 @@ async function resolveDomainIntel(domain, options = {}, signal = null) {
         }
     }
     catch (err) {
-        if (err.name === 'AbortError' || axios_1.default.isCancel(err))
+        if (err.name === 'AbortError')
             return;
     }
     // 3. Query Certificate Transparency (CT) logs via crt.sh
     let subdomains = [];
     try {
-        const response = await axios_1.default.get(`https://crt.sh/?q=${domain}&output=json`, {
+        const response = await getHelper(`https://crt.sh/?q=${domain}&output=json`, {
             timeout: 6000,
-            signal: signal || undefined
+            signal: signal || undefined,
+            responseType: 'json',
+            session
         });
         if (Array.isArray(response.data)) {
             const uniqueSubs = new Set();
-            response.data.forEach(item => {
+            response.data.forEach((item) => {
                 if (item.name_value) {
                     const names = item.name_value.split('\n');
                     names.forEach((name) => {
@@ -566,7 +616,7 @@ async function resolveDomainIntel(domain, options = {}, signal = null) {
         }
     }
     catch (err) {
-        if (err.name === 'AbortError' || axios_1.default.isCancel(err))
+        if (err.name === 'AbortError')
             return;
         if (onResult) {
             onResult({
@@ -623,7 +673,7 @@ async function resolveDomainIntel(domain, options = {}, signal = null) {
                 // Enrich IP with Shodan Ports and Metadata
                 let shodanIntel = null;
                 try {
-                    shodanIntel = await queryShodanIp(ip, signal);
+                    shodanIntel = await queryShodanIp(ip, session, signal);
                 }
                 catch (err) { }
                 const shodanOrg = shodanIntel?.org || '';
@@ -709,10 +759,10 @@ async function resolveDomainIntel(domain, options = {}, signal = null) {
     let docExposed = { documents: [] };
     try {
         const parallelResults = await Promise.all([
-            scrapeLivePage(domain).catch(() => ({ trackers: [], socials: [] })),
-            fetchRobotsTxt(domain).catch(() => ({ hiddenPages: [] })),
-            fetchWaybackHistory(domain).catch(() => ({ history: [] })),
-            fetchExposedDocuments(domain).catch(() => ({ documents: [] }))
+            scrapeLivePage(domain, session).catch(() => ({ trackers: [], socials: [] })),
+            fetchRobotsTxt(domain, session).catch(() => ({ hiddenPages: [] })),
+            fetchWaybackHistory(domain, session).catch(() => ({ history: [] })),
+            fetchExposedDocuments(domain, session).catch(() => ({ documents: [] }))
         ]);
         liveScrape = parallelResults[0];
         robotsTxt = parallelResults[1];

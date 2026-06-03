@@ -8,7 +8,7 @@ exports.generateDossierPDF = generateDossierPDF;
 exports.maskEmail = maskEmail;
 exports.maskPhone = maskPhone;
 const pdfkit_1 = __importDefault(require("pdfkit"));
-const axios_1 = __importDefault(require("axios"));
+const http_factory_1 = require("../shared/http_factory");
 /**
  * PDF Dossier Generator — PRD Section 5
  *
@@ -25,12 +25,12 @@ async function generateDossierPDF(dossier) {
             const cleanPhone = dossier.phone.trim().replace(/\s+/g, '');
             const rawDigits = cleanPhone.replace('+', '');
             const avatarUrl = `https://i.pravatar.cc/150?u=${rawDigits}`;
-            const imgRes = await axios_1.default.get(avatarUrl, {
-                responseType: 'arraybuffer',
-                timeout: 2500
-            });
+            const imgRes = await http_factory_1.HttpFactory.fetchWithSession(avatarUrl, {
+                responseType: 'buffer',
+                signal: AbortSignal.timeout(2500)
+            }, dossier.session);
             if (imgRes.status === 200) {
-                avatarBuffer = Buffer.from(imgRes.data);
+                avatarBuffer = imgRes.body;
             }
         }
         catch {
@@ -39,12 +39,12 @@ async function generateDossierPDF(dossier) {
     }
     else if (dossier.gravatar && dossier.gravatar.avatarUrl) {
         try {
-            const imgRes = await axios_1.default.get(dossier.gravatar.avatarUrl, {
-                responseType: 'arraybuffer',
-                timeout: 2500
-            });
+            const imgRes = await http_factory_1.HttpFactory.fetchWithSession(dossier.gravatar.avatarUrl, {
+                responseType: 'buffer',
+                signal: AbortSignal.timeout(2500)
+            }, dossier.session);
             if (imgRes.status === 200) {
-                avatarBuffer = Buffer.from(imgRes.data);
+                avatarBuffer = imgRes.body;
             }
         }
         catch {

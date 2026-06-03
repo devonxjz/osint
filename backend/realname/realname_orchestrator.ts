@@ -89,11 +89,14 @@ export function scoreConfidence(results: any[], realName: string): 'HIGH' | 'MED
   return 'MEDIUM';
 }
 
+import { ScanSession } from '../shared/session_state';
+
 export interface ScanIdentityOptions {
   deepScan?: boolean;
   cookies?: Record<string, string>;
   onResult?: (result: any) => void;
   onProgress?: (progress: { completed: number; total: number; percentage: number }) => void;
+  session?: ScanSession;
 }
 
 /**
@@ -129,7 +132,7 @@ export async function scanIdentity(
       if (signal && signal.aborted) break;
 
       try {
-        const result = await scanPlatform(variant, platform as any, options.cookies, signal);
+        const result = await scanPlatform(variant, platform as any, options.cookies, signal, { session: options.session });
         if (result.status === 'FOUND') {
           const matched = { variant, ...result };
           if (options.onResult) {

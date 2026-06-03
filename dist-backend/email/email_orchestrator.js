@@ -25,7 +25,7 @@ const permutation_engine_1 = require("./permutation_engine");
  * @returns Consolidated dossier
  */
 async function orchestrateEmailScan(email, options = {}) {
-    const { onEvent = () => { }, hibpApiKey = null } = options;
+    const { onEvent = () => { }, hibpApiKey = null, session } = options;
     const startTime = Date.now();
     const dossier = {
         email,
@@ -66,7 +66,7 @@ async function orchestrateEmailScan(email, options = {}) {
         (async () => {
             try {
                 await stagger(600);
-                const result = await (0, breach_engine_1.lookupBreaches)(email, { hibpApiKey });
+                const result = await (0, breach_engine_1.lookupBreaches)(email, { hibpApiKey, session });
                 onEvent({ module: 'breach', status: result.breaches.length > 0 ? 'FOUND' : 'CLEAN', data: result });
                 return result;
             }
@@ -79,7 +79,7 @@ async function orchestrateEmailScan(email, options = {}) {
         (async () => {
             try {
                 await stagger(900);
-                const result = await (0, gravatar_1.lookupGravatar)(email);
+                const result = await (0, gravatar_1.lookupGravatar)(email, session);
                 onEvent({ module: 'gravatar', status: result.hasGravatar ? 'FOUND' : 'NOT_FOUND', data: result });
                 return result;
             }

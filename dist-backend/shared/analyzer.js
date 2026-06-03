@@ -94,7 +94,26 @@ function analyzeInput(input) {
             error: errorMsg
         };
     }
-    const trimmed = securityParse.data.trim();
+    let trimmed = securityParse.data.trim();
+    // Recursively strip case-insensitive 'scanner:' prefixes
+    let isScanner = false;
+    while (/^scanner:/i.test(trimmed)) {
+        isScanner = true;
+        trimmed = trimmed.substring(8).trim();
+    }
+    if (isScanner) {
+        const innerResult = analyzeInput(trimmed);
+        if (innerResult.valid) {
+            return {
+                type: 'SCANNER',
+                valid: true,
+                sanitized: innerResult.sanitized
+            };
+        }
+        else {
+            return innerResult; // Return the inner failure directly
+        }
+    }
     // Guard against malformed email starting with '@' mimicking a domain
     const MALFORMED_EMAIL_REGEX = /^@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
     if (MALFORMED_EMAIL_REGEX.test(trimmed)) {

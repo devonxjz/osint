@@ -2,7 +2,7 @@
 
 'use strict';
 
-import axios from 'axios';
+import { HttpFactory } from '../shared/http_factory';
 import { validatePhone } from './validator';
 
 export interface DeterministicProfile {
@@ -73,14 +73,19 @@ export async function lookupCallerID(phone: string, options: any = {}): Promise<
   if (sid && token) {
     try {
       const url = `https://lookups.twilio.com/v2/PhoneNumbers/${encodeURIComponent(cleanPhone)}?Fields=line_type_intelligence,caller_name`;
-      const response = await axios.get(url, {
-        auth: {
-          username: sid,
-          password: token
+      const authHeader = 'Basic ' + Buffer.from(`${sid}:${token}`).toString('base64');
+      const response = await HttpFactory.fetchWithSession(url, {
+        headers: {
+          'Authorization': authHeader
         }
-      });
+      }, options.session);
 
-      const data = response.data || {};
+      let data: any = {};
+      try {
+        data = JSON.parse(response.body);
+      } catch (e) {
+        // ignore
+      }
       const twilioName = data.caller_name ? data.caller_name.caller_name : null;
       
       // Handle carrier intelligence

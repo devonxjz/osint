@@ -75,6 +75,11 @@ async function orchestrateScan(target, platforms, callbacks, options = {}) {
             while (index < platformList.length && !isAborted()) {
                 const currentIdx = index++;
                 const platform = platformList[currentIdx];
+                // Introduce randomized request delay (jitter) to prevent burst rate limit triggers
+                if (currentIdx > 0 && !isAborted() && process.env.NODE_ENV !== 'test') {
+                    const jitterDelay = Math.floor(Math.random() * 250) + 50; // 50ms to 300ms random delay
+                    await delay(jitterDelay);
+                }
                 // Check Circuit Breaker
                 const cbState = exports.circuitBreakers[platform.name];
                 if (cbState && cbState.trippedUntil && Date.now() < cbState.trippedUntil) {
@@ -93,9 +98,13 @@ async function orchestrateScan(target, platforms, callbacks, options = {}) {
                 const cookies = options.cookies || {};
                 while (attempt <= retryAttempts && !success && !isAborted()) {
                     try {
+                        if (options.session?.shouldUseProxy() && !sessionProxyOverride) {
+                            sessionProxyOverride = process.env.PROXY_POOL_URL;
+                        }
                         result = await (0, scanner_1.scanPlatform)(target, platform, cookies, signal, {
                             sharedContext,
-                            proxyUrl: sessionProxyOverride
+                            proxyUrl: sessionProxyOverride,
+                            session: options.session
                         });
                         // Check if WAF block is identified
                         const isBlocked = result.error === 'BLOCKED_BY_WAF' ||
@@ -107,21 +116,25 @@ async function orchestrateScan(target, platforms, callbacks, options = {}) {
                                 result.body?.includes('Just a moment...')));
                         if (isBlocked && process.env.PROXY_POOL_URL) {
                             sessionBlockedCount++;
+                            if (options.session) {
+                                options.session.recordWAFHit();
+                            }
                             // Perform per-platform instant retry first if session-wide override is not yet active
                             if (!sessionProxyOverride) {
                                 console.log(`[orchestrateScan] WAF block detected on ${platform.name}. Retrying this specific platform with proxy...`);
                                 try {
                                     result = await (0, scanner_1.scanPlatform)(target, platform, cookies, signal, {
                                         sharedContext,
-                                        proxyUrl: process.env.PROXY_POOL_URL
+                                        proxyUrl: process.env.PROXY_POOL_URL,
+                                        session: options.session
                                     });
                                 }
                                 catch (retryErr) {
                                     // ignore, original result remains
                                 }
                             }
-                            // Only activate session-wide proxy if threshold (>=3) is met
-                            if (sessionBlockedCount >= 3 && !sessionProxyOverride) {
+                            // Only activate session-wide proxy if threshold is met
+                            if ((sessionBlockedCount >= 3 || options.session?.shouldUseProxy()) && !sessionProxyOverride) {
                                 console.log(`[orchestrateScan] WAF block threshold (>=3) reached. Activating session-wide proxy pool for subsequent requests.`);
                                 sessionProxyOverride = process.env.PROXY_POOL_URL;
                             }

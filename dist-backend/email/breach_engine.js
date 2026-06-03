@@ -1,12 +1,9 @@
 // backend/email/breach_engine.ts
 'use strict';
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BREACH_POOL = void 0;
 exports.lookupBreaches = lookupBreaches;
-const axios_1 = __importDefault(require("axios"));
+const http_factory_1 = require("../shared/http_factory");
 exports.BREACH_POOL = [
     { name: 'LinkedIn', domain: 'linkedin.com', breachDate: '2012-05-05', pwnCount: 164611595, compromisedData: ['Email Addresses', 'Passwords'], description: 'In May 2012, LinkedIn suffered a data breach exposing 164 million email addresses and passwords stored as SHA1 hashes.', isSensitive: false, isVerified: true },
     { name: 'Adobe', domain: 'adobe.com', breachDate: '2013-10-04', pwnCount: 153000000, compromisedData: ['Email Addresses', 'Passwords', 'Usernames', 'Password Hints'], description: 'In October 2013, 153 million Adobe accounts were breached with encrypted passwords and plaintext password hints.', isSensitive: false, isVerified: true },
@@ -47,44 +44,56 @@ const PATTERN_RULES = [
 async function lookupBreaches(email, options = {}) {
     const apiKey = options.hibpApiKey || process.env.HIBP_API_KEY || null;
     if (apiKey) {
-        return queryHIBP(email, apiKey);
+        return queryHIBP(email, apiKey, options.session);
     }
     return queryMockDatabase(email);
 }
 /**
  * Live HIBP API query with 1500ms rate-limit sleep.
  */
-async function queryHIBP(email, apiKey) {
+async function queryHIBP(email, apiKey, session) {
     // Enforce rate limit — 1 req / 1500ms per PRD
     await new Promise(resolve => setTimeout(resolve, 1500));
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     try {
-        const response = await axios_1.default.get(`https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(email)}`, {
+        const response = await http_factory_1.HttpFactory.fetchWithSession(`https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(email)}`, {
             headers: {
                 'hibp-api-key': apiKey,
                 'User-Agent': 'OSINT-Intelligence-Suite',
             },
-            validateStatus: () => true,
-            timeout: 10000,
-        });
-        if (response.status === 200 && Array.isArray(response.data)) {
-            return {
-                source: 'hibp',
-                breaches: response.data.map((b) => ({
-                    name: b.Name,
-                    domain: b.Domain,
-                    breachDate: b.BreachDate,
-                    pwnCount: b.PwnCount,
-                    compromisedData: b.DataClasses || [],
-                    description: b.Description || '',
-                    isSensitive: b.IsSensitive || false,
-                    isVerified: b.IsVerified || false,
-                })),
-            };
+            signal: controller.signal,
+        }, session);
+        clearTimeout(timeoutId);
+        if (response.status === 200) {
+            let data = [];
+            try {
+                data = JSON.parse(response.body);
+            }
+            catch (e) {
+                // ignore
+            }
+            if (Array.isArray(data)) {
+                return {
+                    source: 'hibp',
+                    breaches: data.map((b) => ({
+                        name: b.Name,
+                        domain: b.Domain,
+                        breachDate: b.BreachDate,
+                        pwnCount: b.PwnCount,
+                        compromisedData: b.DataClasses || [],
+                        description: b.Description || '',
+                        isSensitive: b.IsSensitive || false,
+                        isVerified: b.IsVerified || false,
+                    })),
+                };
+            }
         }
         // 404 = no breaches found, anything else = treat as empty
         return { source: 'hibp', breaches: [] };
     }
     catch (err) {
+        clearTimeout(timeoutId);
         // Fallback to mock on network failure
         return queryMockDatabase(email);
     }

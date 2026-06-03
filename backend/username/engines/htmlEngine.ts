@@ -96,7 +96,7 @@ export class HtmlEngine implements BaseEngine {
     }
 
     try {
-      const headers: Record<string, string> = { 
+      const headers: Record<string, string> = {
         'sec-ch-ua': '"Not A(Brand";v="99", "Google Chrome";v="121"',
         'sec-ch-ua-mobile': '?0',
         'sec-ch-ua-platform': '"Windows"',
@@ -136,10 +136,10 @@ export class HtmlEngine implements BaseEngine {
       const status = response.status;
 
       if (status === 429 || status === 403) {
-        return { 
-          platform: platform.name, 
-          status: 'NOT_FOUND', 
-          url: targetUrl, 
+        return {
+          platform: platform.name,
+          status: 'NOT_FOUND',
+          url: targetUrl,
           error: 'BLOCKED_BY_WAF',
           responseTimeMs
         };
@@ -147,8 +147,8 @@ export class HtmlEngine implements BaseEngine {
 
       // Soft 404 Redirect Detection (e.g. MeWe redirects non-existent users to mewe.com/404 with 200 OK status)
       if (response.url && (
-        response.url.endsWith('/404') || 
-        response.url.includes('/404') || 
+        response.url.endsWith('/404') ||
+        response.url.includes('/404') ||
         response.url.includes('/error/404') ||
         response.url.endsWith('/error')
       )) {

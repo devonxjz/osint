@@ -16,7 +16,8 @@
 * **Unified Scan Endpoint**: A consolidated EventSource route `/api/scan` that classifies the 5 target vectors and orchestrates all scans concurrently through a single Express handler.
 * **Polymorphic OSINT Engine**: A multi-tiered crawling architecture routing username targets across three dedicated scraping layers: API, HTML, and Browser (Playwright).
 * **Dynamic Concurrency Lanes**: Three separate, parallel execution queues (API, HTML, and Browser) protecting target system resources (capping Playwright at 2 threads) while maximizing unauthenticated API lanes to 30 threads.
-* **Hybrid Playwright Fallback**: The automatic mechanism that detects Vercel hosting (`process.env.VERCEL`) to bypass local browser rendering, downgrading to high-evasion Axios network queries to fit serverless environment limits.
+* **Hybrid Evasion Architecture**: The request routing system that detects the current environment and automatically chooses between local high-stealth Playwright browser rendering and serverless-friendly network clients (impersonation or API proxy wrappers) to bypass WAF detection.
+* **Adaptive Session State Promotion**: The mechanism that monitors WAF challenges in an isolated scan session. Once blocks exceed a defined threshold, the session automatically upgrades all remaining requests to bypass basic connections and query directly through a high-evasion proxy.
 * **Abort Propagation**: The mechanism of forwarding `AbortSignal` down the entire OSINT engine execution chain; any `AbortError` must be handled silently (silent exit) without polluting logs or SSE streams.
 
 ## System Architecture

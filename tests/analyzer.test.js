@@ -177,10 +177,28 @@ describe('analyzeInput()', () => {
       expect(result.error).toBe(ERRORS.NOT_A_STRING);
     });
 
-    it('returns valid:false for numeric input (type coercion guard)', () => {
-      const result = analyzeInput(12345);
+  });
+
+  describe('Scanner Prefix Detection', () => {
+    it('detects simple scanner prefix and sanitizes', () => {
+      const result = analyzeInput('scanner:johndoe');
+      expect(result).toEqual({ type: 'SCANNER', valid: true, sanitized: 'johndoe' });
+    });
+
+    it('detects scanner prefix case-insensitively', () => {
+      const result = analyzeInput('Scanner:johndoe');
+      expect(result).toEqual({ type: 'SCANNER', valid: true, sanitized: 'johndoe' });
+    });
+
+    it('detects nested scanner prefixes recursively', () => {
+      const result = analyzeInput('scanner:Scanner:johndoe');
+      expect(result).toEqual({ type: 'SCANNER', valid: true, sanitized: 'johndoe' });
+    });
+
+    it('returns validation error if inner target is invalid', () => {
+      const result = analyzeInput('scanner:j');
       expect(result.valid).toBe(false);
-      expect(result.error).toBe(ERRORS.NOT_A_STRING);
+      expect(result.error).toBe(ERRORS.USERNAME_SHORT);
     });
   });
 

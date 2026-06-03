@@ -33,7 +33,7 @@ const inputSecuritySchema = z.string()
     message: ERRORS.TRAVERSAL_DETECTED // Path traversal protection (blocks directory traversal attempts)
   });
 
-export type TargetType = 'EMAIL' | 'PHONE' | 'REAL_NAME' | 'DOMAIN' | 'USERNAME';
+export type TargetType = 'EMAIL' | 'PHONE' | 'REAL_NAME' | 'DOMAIN' | 'USERNAME' | 'SCANNER';
 
 export interface AnalysisSuccess {
   valid: true;
@@ -121,7 +121,27 @@ export function analyzeInput(input: any): AnalysisResult {
     };
   }
 
-  const trimmed = securityParse.data.trim();
+  let trimmed = securityParse.data.trim();
+
+  // Recursively strip case-insensitive 'scanner:' prefixes
+  let isScanner = false;
+  while (/^scanner:/i.test(trimmed)) {
+    isScanner = true;
+    trimmed = trimmed.substring(8).trim();
+  }
+
+  if (isScanner) {
+    const innerResult = analyzeInput(trimmed);
+    if (innerResult.valid) {
+      return {
+        type: 'SCANNER',
+        valid: true,
+        sanitized: innerResult.sanitized
+      };
+    } else {
+      return innerResult; // Return the inner failure directly
+    }
+  }
 
   // Guard against malformed email starting with '@' mimicking a domain
   const MALFORMED_EMAIL_REGEX = /^@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;

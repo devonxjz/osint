@@ -3,6 +3,7 @@
 'use strict';
 
 import { scanPlatform, Platform, ScanResult } from './scanner';
+import { ScanSession } from '../shared/session_state';
 
 interface CircuitBreakerState {
   consecutiveFailures: number;
@@ -31,6 +32,7 @@ export interface OrchestrateOptions {
   cache?: any;
   signal?: AbortSignal | null;
   cookies?: Record<string, string>;
+  session?: ScanSession;
 }
 
 export async function orchestrateScan(
@@ -118,6 +120,12 @@ export async function orchestrateScan(
         const currentIdx = index++;
         const platform = platformList[currentIdx];
 
+        // Introduce randomized request delay (jitter) to prevent burst rate limit triggers
+        if (currentIdx > 0 && !isAborted() && process.env.NODE_ENV !== 'test') {
+          const jitterDelay = Math.floor(Math.random() * 250) + 50; // 50ms to 300ms random delay
+          await delay(jitterDelay);
+        }
+
         // Check Circuit Breaker
         const cbState = circuitBreakers[platform.name];
         if (cbState && cbState.trippedUntil && Date.now() < cbState.trippedUntil) {
@@ -138,9 +146,14 @@ export async function orchestrateScan(
         const cookies = options.cookies || {};
         while (attempt <= retryAttempts && !success && !isAborted()) {
           try {
+            if (options.session?.shouldUseProxy() && !sessionProxyOverride) {
+              sessionProxyOverride = process.env.PROXY_POOL_URL;
+            }
+
             result = await scanPlatform(target, platform, cookies, signal, {
               sharedContext,
-              proxyUrl: sessionProxyOverride
+              proxyUrl: sessionProxyOverride,
+              session: options.session
             });
 
             // Check if WAF block is identified
@@ -156,6 +169,9 @@ export async function orchestrateScan(
 
             if (isBlocked && process.env.PROXY_POOL_URL) {
               sessionBlockedCount++;
+              if (options.session) {
+                options.session.recordWAFHit();
+              }
 
               // Perform per-platform instant retry first if session-wide override is not yet active
               if (!sessionProxyOverride) {
@@ -163,15 +179,16 @@ export async function orchestrateScan(
                 try {
                   result = await scanPlatform(target, platform, cookies, signal, {
                     sharedContext,
-                    proxyUrl: process.env.PROXY_POOL_URL
+                    proxyUrl: process.env.PROXY_POOL_URL,
+                    session: options.session
                   });
                 } catch (retryErr) {
                   // ignore, original result remains
                 }
               }
 
-              // Only activate session-wide proxy if threshold (>=3) is met
-              if (sessionBlockedCount >= 3 && !sessionProxyOverride) {
+              // Only activate session-wide proxy if threshold is met
+              if ((sessionBlockedCount >= 3 || options.session?.shouldUseProxy()) && !sessionProxyOverride) {
                 console.log(`[orchestrateScan] WAF block threshold (>=3) reached. Activating session-wide proxy pool for subsequent requests.`);
                 sessionProxyOverride = process.env.PROXY_POOL_URL;
               }

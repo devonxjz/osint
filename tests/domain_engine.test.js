@@ -1,7 +1,7 @@
 'use strict';
 
 const dns = require('dns').promises;
-const axios = require('axios');
+const { evasionClient } = require('../dist-backend/username/engines/evasionClient');
 const {
   isCloudflareIp,
   detectWildcardDns,
@@ -9,13 +9,26 @@ const {
   syncCloudflareIps
 } = require('../dist-backend/domain');
 
-// Mock DNS and Axios
+// Mock DNS and EvasionClient
 jest.mock('dns', () => ({
   promises: {
     resolve4: jest.fn()
   }
 }));
-jest.mock('axios');
+jest.mock('../dist-backend/username/engines/evasionClient', () => ({
+  evasionClient: {
+    request: jest.fn()
+  }
+}));
+jest.mock('../dist-backend/shared/playwright_client', () => ({
+  playwrightStealthClient: {
+    request: jest.fn().mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: '<html>mocked stealth</html>'
+    })
+  }
+}));
 
 describe('Domain Intelligence Engine - TDD Tests', () => {
   beforeEach(() => {
@@ -83,14 +96,14 @@ describe('Domain Intelligence Engine - TDD Tests', () => {
   describe('resolveDomainIntel() - Graph JSON Structure', () => {
     it('returns a dossier with a default structured graph object containing nodes and edges', async () => {
       dns.resolve4.mockRejectedValue(new Error('ENOTFOUND')); // No subdomains found
-      axios.get.mockImplementation(async (url) => {
+      evasionClient.request.mockImplementation(async (url) => {
         if (url.includes('rdap.org') || url.includes('rdap-bootstrap')) {
-          return { data: { port43: 'whois.iana.org', events: [], status: [], nameservers: [] } };
+          return { status: 200, headers: {}, body: JSON.stringify({ port43: 'whois.iana.org', events: [], status: [], nameservers: [] }) };
         }
         if (url.includes('crt.sh')) {
-          return { data: [] };
+          return { status: 200, headers: {}, body: JSON.stringify([]) };
         }
-        return { data: {} };
+        return { status: 200, headers: {}, body: '{}' };
       });
 
       const result = await resolveDomainIntel('example.com', {
@@ -106,10 +119,12 @@ describe('Domain Intelligence Engine - TDD Tests', () => {
     it('extracts WHOIS registrant name and email into graph nodes and edges', async () => {
       dns.resolve4.mockRejectedValue(new Error('ENOTFOUND')); // No subdomains
       
-      axios.get.mockImplementation(async (url) => {
+      evasionClient.request.mockImplementation(async (url) => {
         if (url.includes('rdap.org') || url.includes('rdap-bootstrap')) {
           return {
-            data: {
+            status: 200,
+            headers: {},
+            body: JSON.stringify({
               port43: 'whois.iana.org',
               entities: [
                 {
@@ -123,10 +138,10 @@ describe('Domain Intelligence Engine - TDD Tests', () => {
                   ]
                 }
               ]
-            }
+            })
           };
         }
-        return { data: [] };
+        return { status: 200, headers: {}, body: '[]' };
       });
 
       const result = await resolveDomainIntel('example.com');
@@ -156,14 +171,14 @@ describe('Domain Intelligence Engine - TDD Tests', () => {
         throw new Error('ENOTFOUND');
       });
 
-      axios.get.mockImplementation(async (url) => {
+      evasionClient.request.mockImplementation(async (url) => {
         if (url.includes('rdap.org') || url.includes('rdap-bootstrap')) {
-          return { data: { port43: 'whois.iana.org', entities: [] } };
+          return { status: 200, headers: {}, body: JSON.stringify({ port43: 'whois.iana.org', entities: [] }) };
         }
         if (url.includes('crt.sh')) {
-          return { data: [{ name_value: 'api.example.com' }] };
+          return { status: 200, headers: {}, body: JSON.stringify([{ name_value: 'api.example.com' }]) };
         }
-        return { data: [] };
+        return { status: 200, headers: {}, body: '[]' };
       });
 
       const result = await resolveDomainIntel('example.com');
@@ -189,19 +204,21 @@ describe('Domain Intelligence Engine - TDD Tests', () => {
     it('harvests trackers, socials, robots.txt, wayback history, and exposed documents in parallel', async () => {
       dns.resolve4.mockRejectedValue(new Error('ENOTFOUND')); // No subdomains
 
-      axios.get.mockImplementation(async (url) => {
+      evasionClient.request.mockImplementation(async (url) => {
         // WHOIS
         if (url.includes('rdap.org') || url.includes('rdap-bootstrap')) {
-          return { data: { port43: 'whois.iana.org', entities: [] } };
+          return { status: 200, headers: {}, body: JSON.stringify({ port43: 'whois.iana.org', entities: [] }) };
         }
         // crt.sh
         if (url.includes('crt.sh')) {
-          return { data: [] };
+          return { status: 200, headers: {}, body: '[]' };
         }
         // Live page HTML scrape (Task 23)
         if (url === 'http://harvest-test.com') {
           return {
-            data: `
+            status: 200,
+            headers: {},
+            body: `
               <html>
                 <body>
                   <script>
@@ -219,7 +236,9 @@ describe('Domain Intelligence Engine - TDD Tests', () => {
         // robots.txt (Task 24)
         if (url === 'http://harvest-test.com/robots.txt') {
           return {
-            data: `
+            status: 200,
+            headers: {},
+            body: `
               User-agent: *
               Disallow: /admin
               Disallow: /private-data
@@ -229,16 +248,20 @@ describe('Domain Intelligence Engine - TDD Tests', () => {
         // Wayback machine (Task 24)
         if (url.includes('web.archive.org/cdx')) {
           return {
-            data: [
+            status: 200,
+            headers: {},
+            body: JSON.stringify([
               ['urlkey', 'timestamp', 'original', 'mimetype', 'statuscode', 'digest', 'length'],
               ['com,harvest-test)/', '20240101120000', 'http://harvest-test.com/', 'text/html', '200', 'sha1', '100']
-            ]
+            ])
           };
         }
         // Document search discovery (Task 25)
         if (url.includes('duckduckgo.com')) {
           return {
-            data: `
+            status: 200,
+            headers: {},
+            body: `
               <a href="https://harvest-test.com/files/report.pdf">Report PDF</a>
             `
           };
@@ -246,11 +269,13 @@ describe('Domain Intelligence Engine - TDD Tests', () => {
         // Partial PDF Range request (Task 25)
         if (url === 'https://harvest-test.com/files/report.pdf') {
           return {
-            data: Buffer.from('/Author (Jane Doe) /Email (jane@harvest-test.com)')
+            status: 200,
+            headers: {},
+            body: Buffer.from('/Author (Jane Doe) /Email (jane@harvest-test.com)')
           };
         }
 
-        return { data: {} };
+        return { status: 200, headers: {}, body: '{}' };
       });
 
       const result = await resolveDomainIntel('harvest-test.com');
@@ -319,14 +344,14 @@ describe('Domain Intelligence Engine - TDD Tests', () => {
         throw new Error('ENOTFOUND');
       });
 
-      axios.get.mockImplementation(async (url) => {
+      evasionClient.request.mockImplementation(async (url) => {
         if (url.includes('rdap.org') || url.includes('rdap-bootstrap')) {
-          return { data: { port43: 'whois.iana.org', entities: [] } };
+          return { status: 200, headers: {}, body: JSON.stringify({ port43: 'whois.iana.org', entities: [] }) };
         }
         if (url.includes('crt.sh')) {
-          return { data: [{ name_value: 'api.example.com' }] };
+          return { status: 200, headers: {}, body: JSON.stringify([{ name_value: 'api.example.com' }]) };
         }
-        return { data: {} };
+        return { status: 200, headers: {}, body: '{}' };
       });
 
       const result = await resolveDomainIntel('example.com');
@@ -343,8 +368,8 @@ describe('Domain Intelligence Engine - TDD Tests', () => {
       expect(portNode80).toBeDefined();
       expect(portNode443).toBeDefined();
 
-      // Ensure Axios was NOT called with Shodan API URL
-      const shodanCalls = axios.get.mock.calls.filter(call => call[0].includes('api.shodan.io'));
+      // Ensure evasionClient was NOT called with Shodan API URL
+      const shodanCalls = evasionClient.request.mock.calls.filter(call => call[0].includes('api.shodan.io'));
       expect(shodanCalls.length).toBe(0);
     });
 
@@ -358,32 +383,34 @@ describe('Domain Intelligence Engine - TDD Tests', () => {
         throw new Error('ENOTFOUND');
       });
 
-      axios.get.mockImplementation(async (url) => {
+      evasionClient.request.mockImplementation(async (url) => {
         if (url.includes('rdap.org') || url.includes('rdap-bootstrap')) {
-          return { data: { port43: 'whois.iana.org', entities: [] } };
+          return { status: 200, headers: {}, body: JSON.stringify({ port43: 'whois.iana.org', entities: [] }) };
         }
         if (url.includes('crt.sh')) {
-          return { data: [{ name_value: 'api.example.com' }] };
+          return { status: 200, headers: {}, body: JSON.stringify([{ name_value: 'api.example.com' }]) };
         }
         if (url.includes('api.shodan.io')) {
           return {
-            data: {
+            status: 200,
+            headers: {},
+            body: JSON.stringify({
               ports: [22, 443, 80],
               org: 'Custom Shodan Org',
               isp: 'Custom Shodan ISP',
               os: 'FreeBSD 13.x',
               country_name: 'Singapore',
               city: 'Changi'
-            }
+            })
           };
         }
-        return { data: {} };
+        return { status: 200, headers: {}, body: '{}' };
       });
 
       const result = await resolveDomainIntel('example.com');
 
       // Ensure Shodan API was queried using correct key and IP
-      const shodanCalls = axios.get.mock.calls.filter(call => call[0].includes('api.shodan.io'));
+      const shodanCalls = evasionClient.request.mock.calls.filter(call => call[0].includes('api.shodan.io'));
       expect(shodanCalls.length).toBe(1);
       expect(shodanCalls[0][0]).toContain('8.8.8.8');
       expect(shodanCalls[0][0]).toContain('key=test-shodan-key');
@@ -413,17 +440,17 @@ describe('Domain Intelligence Engine - TDD Tests', () => {
         throw new Error('ENOTFOUND');
       });
 
-      axios.get.mockImplementation(async (url) => {
+      evasionClient.request.mockImplementation(async (url) => {
         if (url.includes('rdap.org') || url.includes('rdap-bootstrap')) {
-          return { data: { port43: 'whois.iana.org', entities: [] } };
+          return { status: 200, headers: {}, body: JSON.stringify({ port43: 'whois.iana.org', entities: [] }) };
         }
         if (url.includes('crt.sh')) {
-          return { data: [{ name_value: 'api.example.com' }] };
+          return { status: 200, headers: {}, body: JSON.stringify([{ name_value: 'api.example.com' }]) };
         }
         if (url.includes('api.shodan.io')) {
           throw new Error('401 Unauthorized API Key');
         }
-        return { data: {} };
+        return { status: 200, headers: {}, body: '{}' };
       });
 
       // Scan should complete successfully without throwing
@@ -434,6 +461,31 @@ describe('Domain Intelligence Engine - TDD Tests', () => {
       const ipNode = result.graph.nodes.find(n => n.id === 'ip-9.9.9.9');
       expect(ipNode).toBeDefined();
       expect(ipNode.properties.shodan_org).toBe('Enterprise Hosting Provider');
+    });
+
+    it('passes ScanSession through to helpers and HttpFactory', async () => {
+      const { ScanSession } = require('../dist-backend/shared/session_state');
+      const session = new ScanSession();
+      jest.spyOn(session, 'recordWAFHit');
+
+      dns.resolve4.mockRejectedValue(new Error('ENOTFOUND')); // No subdomains
+
+      evasionClient.request.mockImplementation(async (url) => {
+        if (url.includes('rdap.org')) {
+          // Return WAF block
+          return {
+            status: 403,
+            headers: { 'cf-mitigated': 'challenge' },
+            body: 'cf-challenge block'
+          };
+        }
+        return { status: 200, headers: {}, body: '{}' };
+      });
+
+      const result = await resolveDomainIntel('example.com', { session });
+      expect(result).toBeDefined();
+      // Since it hit a WAF block in local mode, it records a WAF hit
+      expect(session.recordWAFHit).toHaveBeenCalled();
     });
   });
 });

@@ -3,7 +3,8 @@
 'use strict';
 
 import crypto from 'crypto';
-import axios from 'axios';
+import { HttpFactory } from '../shared/http_factory';
+import { ScanSession } from '../shared/session_state';
 
 /**
  * Computes Gravatar-compatible MD5 hash.
@@ -40,7 +41,7 @@ export interface GravatarResult {
  * @param email
  * @returns GravatarResult
  */
-export async function lookupGravatar(email: string): Promise<GravatarResult> {
+export async function lookupGravatar(email: string, session?: ScanSession): Promise<GravatarResult> {
   const hash = computeGravatarHash(email);
   const result: GravatarResult = {
     hash,
@@ -54,13 +55,13 @@ export async function lookupGravatar(email: string): Promise<GravatarResult> {
 
   try {
     // Step 1: Check avatar existence
-    const avatarResponse = await axios.get(
+    const avatarResponse = await HttpFactory.fetchWithSession(
       `https://www.gravatar.com/avatar/${hash}?d=404`,
       {
-        validateStatus: () => true,
-        timeout: 5000,
-        responseType: 'arraybuffer', // Don't parse image as text
-      }
+        responseType: 'buffer',
+        signal: AbortSignal.timeout(5000)
+      },
+      session
     );
 
     if (avatarResponse.status !== 200) {
@@ -72,20 +73,28 @@ export async function lookupGravatar(email: string): Promise<GravatarResult> {
 
     // Step 2: Fetch extended profile JSON
     try {
-      const profileResponse = await axios.get(
+      const profileResponse = await HttpFactory.fetchWithSession(
         `https://www.gravatar.com/${hash}.json`,
         {
-          validateStatus: () => true,
-          timeout: 5000,
-        }
+          signal: AbortSignal.timeout(5000)
+        },
+        session
       );
 
-      if (profileResponse.status === 200 && profileResponse.data && profileResponse.data.entry) {
-        const entry = profileResponse.data.entry[0];
-        result.displayName = entry.displayName || entry.preferredUsername || null;
-        result.aboutMe = entry.aboutMe || null;
-        result.location = entry.currentLocation || null;
-        result.profileUrls = (entry.urls || []).map((u: any) => u.value);
+      if (profileResponse.status === 200) {
+        let profileData: any = null;
+        try {
+          profileData = JSON.parse(profileResponse.body);
+        } catch (e) {
+          // ignore
+        }
+        if (profileData && profileData.entry) {
+          const entry = profileData.entry[0];
+          result.displayName = entry.displayName || entry.preferredUsername || null;
+          result.aboutMe = entry.aboutMe || null;
+          result.location = entry.currentLocation || null;
+          result.profileUrls = (entry.urls || []).map((u: any) => u.value);
+        }
       }
     } catch {
       // Profile JSON is optional, avatar is sufficient

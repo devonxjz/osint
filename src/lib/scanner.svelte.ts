@@ -109,6 +109,9 @@ export class ScannerState {
   // Domain-specific States
   domainDossier = $state<any>(null);
 
+  // Raw Scanner Mode Result State
+  rawScannerResult = $state<any>(null);
+
   // Global Theme Toggling State ('light' | 'dark')
   theme = $state<'light' | 'dark'>('dark');
 
@@ -351,6 +354,7 @@ export class ScannerState {
     this.phoneDossier = null;
     this.identityDossier = null;
     this.domainDossier = null;
+    this.rawScannerResult = null;
 
     // Initialize frame-buffers
     this.progressBuffer = null;
@@ -369,6 +373,8 @@ export class ScannerState {
       this.startRealNameScan();
     } else if (this.targetType === 'DOMAIN') {
       this.startDomainScan();
+    } else if (this.targetType === 'SCANNER') {
+      this.startScannerScan();
     } else {
       this.startUsernameScan();
     }
@@ -949,9 +955,42 @@ export class ScannerState {
     }
   }
 
-  private validateTarget(): 'EMAIL' | 'PHONE' | 'DOMAIN' | 'REAL_NAME' | 'USERNAME' | null {
+  private async startScannerScan() {
+    this.logs.push('[+] Routing to Raw Scanner pipeline...');
+    this.logs.push('[+] Querying raw JSON data from scanner endpoint...');
+    this.progress = { completed: 0, total: 1, percentage: 0 };
+
+    try {
+      const queryParams = new URLSearchParams({
+        target: this.target.trim(),
+        categories: this.categories.join(','),
+        cookies: JSON.stringify(this.cookieOverrides)
+      });
+      const url = `${this.apiBase}/api/scan?${queryParams.toString()}`;
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Server returned status ${response.status}`);
+      }
+      const data = await response.json();
+      this.rawScannerResult = data;
+      this.progress = { completed: 1, total: 1, percentage: 100 };
+      this.logs.push('[✓] Raw Scanner query completed successfully.');
+      this.isScanning = false;
+      this.flushBuffers();
+    } catch (err: any) {
+      this.handleError(err.message || 'Failed to fetch raw scanner output.');
+    }
+  }
+
+  private validateTarget(): 'EMAIL' | 'PHONE' | 'DOMAIN' | 'REAL_NAME' | 'USERNAME' | 'SCANNER' | null {
     const raw = this.target.trim();
     if (!raw) return null;
+
+    // 0. Scanner check (starts with 'scanner:')
+    if (/^scanner:/i.test(raw)) {
+      return 'SCANNER';
+    }
 
     // 1. Email check
     const EMAIL_REGEX = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;

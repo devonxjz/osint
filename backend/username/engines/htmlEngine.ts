@@ -22,7 +22,7 @@ export function getRandomUserAgent(): string {
   return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 
-interface PlatformMetadata {
+export interface PlatformMetadata {
   bio: string | null;
   displayName: string | null;
   avatar: string | null;
@@ -163,16 +163,10 @@ export class HtmlEngine implements BaseEngine {
 
       const html = response.body;
 
-      let parsedMetadata = { bio: null, displayName: null, avatar: null, location: null };
+      let parsedMetadata: PlatformMetadata = { bio: null, displayName: null, avatar: null, location: null };
 
       if (typeof html === 'string') {
-        const metadata = extractMetadata(html, platform.name);
-        parsedMetadata = {
-          bio: metadata.bio as any,
-          displayName: metadata.displayName as any,
-          avatar: metadata.avatar as any,
-          location: metadata.location as any
-        };
+        parsedMetadata = extractMetadata(html, platform.name);
         if (isSoft404(html, username, parsedMetadata.bio)) {
           return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
         }

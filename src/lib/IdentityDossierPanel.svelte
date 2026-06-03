@@ -23,8 +23,9 @@
         <span class="pulse-dot" class:active={scanner.isScanning}></span>
         <span class="status-text">{scanner.isScanning ? 'Gathering Profiles...' : 'Scan Complete'}</span>
       </div>
-      <h2 class="target-title-display">
-        👤 {scanner.target.trim()}
+      <h2 class="target-title-display" style="display: flex; align-items: center; gap: 8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        {scanner.target.trim()}
       </h2>
       <div class="metadata-grid">
         <div class="meta-item">
@@ -48,18 +49,21 @@
 
     <!-- SECTION 2: Confidence Rating -->
     <div class="glass-panel confidence-card transition-fade">
-      <h3 class="panel-section-title">🛡️ Digital Footprint Confidence Rating</h3>
+      <h3 class="panel-section-title" style="display: flex; align-items: center; gap: 8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+        Digital Footprint Confidence Rating
+      </h3>
       <p class="panel-section-subtitle">
         Confidence score evaluates name matches and contextual keywords found in bio descriptions across 15 high-value platforms.
       </p>
 
       <div class="confidence-glow-container {confidence.toLowerCase()}">
         <div class="confidence-info-layout">
-          <div class="badge-icon">
+          <div class="badge-icon" style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px;">
             {#if confidence === 'HIGH'}
-              🔥
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
             {:else}
-              ⚡
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
             {/if}
           </div>
           <div class="badge-texts">
@@ -80,7 +84,10 @@
 
     <!-- SECTION 3: Matched Social Profiles -->
     <div class="glass-panel matches-panel transition-fade">
-      <h3 class="panel-section-title">🌐 Discovered Digital Profiles</h3>
+      <h3 class="panel-section-title" style="display: flex; align-items: center; gap: 8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+        Discovered Digital Profiles
+      </h3>
       <p class="panel-section-subtitle">
         Active accounts found across high-value social, tech, and creative networks matching candidate username variants.
       </p>
@@ -127,13 +134,15 @@
                     <p class="profile-bio-text">"{profile.bio}"</p>
                   {/if}
                   {#if profile.location}
-                    <div class="profile-location">
-                      📍 {profile.location}
+                    <div class="profile-location" style="display: flex; align-items: center; gap: 4px;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                      {profile.location}
                     </div>
                   {/if}
                   {#if profile.confidence === 'LOW'}
-                    <div class="collision-warning">
-                      ⚠️ {scanner.language === 'vi' ? 'Khớp Username - Chưa xác thực được danh tính' : 'Potential Username Collision (No confirmation)'}
+                    <div class="collision-warning" style="display: flex; align-items: center; gap: 6px;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                      {scanner.language === 'vi' ? 'Khớp Username - Chưa xác thực được danh tính' : 'Potential Username Collision (No confirmation)'}
                     </div>
                   {/if}
                 </div>

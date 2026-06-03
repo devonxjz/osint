@@ -51,7 +51,10 @@
   {#if missingCredentialsPlatforms.length > 0}
     <div class="breach-alert-card" style="border-color: rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.02); margin-bottom: 8px; padding: 22px; animation: fade-in-up 0.3s ease; display: flex; flex-direction: column; gap: 14px;">
       <div class="breach-card-header" style="color: var(--accent-orange); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(245, 158, 11, 0.15); padding-bottom: 8px;">
-        <span style="font-weight: 700; display: flex; align-items: center; gap: 8px;">{scanner.t.restrictedCookies}</span>
+        <span style="font-weight: 700; display: flex; align-items: center; gap: 8px; color: var(--accent-orange);">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          {scanner.t.restrictedCookies}
+        </span>
         <button 
           type="button" 
           onclick={() => showGuide = !showGuide}
@@ -82,8 +85,9 @@
           <div style="display: grid; grid-template-columns: 240px 1fr 100px; align-items: center; gap: 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 8px 12px; border-radius: 8px;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <span style="font-weight: 700; font-size: 13px; color: var(--text-primary);">{plat.name}</span>
-              <span class="status-badge" style="background: rgba(245, 158, 11, 0.08); color: var(--accent-orange); font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight: 700; border: 1px solid rgba(245, 158, 11, 0.2); white-space: nowrap;">
-                {scanner.language === 'vi' ? '⚠️ YÊU CẦU AUTH' : '⚠️ NEED AUTH'}
+              <span class="status-badge" style="background: rgba(245, 158, 11, 0.08); color: var(--accent-orange); font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight: 700; border: 1px solid rgba(245, 158, 11, 0.2); white-space: nowrap; display: flex; align-items: center; gap: 4px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                {scanner.language === 'vi' ? 'YÊU CẦU AUTH' : 'NEED AUTH'}
               </span>
             </div>
             
@@ -156,7 +160,7 @@
   {#if filteredPlatforms.length === 0}
     <!-- Empty state when no categories selected -->
     <div style="padding: 60px 24px; text-align: center; color: var(--text-secondary); background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 16px; box-shadow: var(--shadow-sm);">
-      <span style="font-size: 40px;">⚠️</span>
+      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-orange)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 8px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
       <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">{scanner.t.noCatSelected}</h4>
       <p style="margin: 0; font-size: 14px; max-width: 440px; line-height: 1.5;">
         {scanner.t.noCatSelectedDesc}
@@ -165,7 +169,7 @@
   {:else if scannedCount === 0 && !scanner.isScanning}
     <!-- Empty State: Before search begins -->
     <div style="padding: 60px 24px; text-align: center; color: var(--text-secondary); background: var(--bg-card); border: 1px dashed var(--border-color); border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 16px; box-shadow: var(--shadow-sm);">
-      <span style="font-size: 40px;">🕵️</span>
+      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 8px;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><path d="M11 8v6"></path><path d="M8 11h6"></path></svg>
       <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">{scanner.t.awaitingInvest}</h4>
       <p style="margin: 0; font-size: 14px; max-width: 440px; line-height: 1.5;">
         {scanner.t.awaitingInvestDesc}
@@ -188,7 +192,7 @@
       {:else}
         <!-- No matches found after scan completed -->
         <div style="padding: 60px 24px; text-align: center; color: var(--text-secondary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 16px; box-shadow: var(--shadow-sm); width: 100%;">
-          <span style="font-size: 40px;">∅</span>
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 8px;"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
           <h4 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">{scanner.t.noMatch}</h4>
           <p style="margin: 0; font-size: 14px; max-width: 440px; line-height: 1.5;">
             {scanner.t.noMatchDesc}
@@ -214,14 +218,21 @@
               <!-- Dynamic Schema Attribute Badges -->
               <div style="display: flex; flex-wrap: wrap; gap: 4px;">
                 {#if platform.requiresProxy}
-                  <span class="status-badge" style="background: rgba(16, 185, 129, 0.08); color: var(--accent-green); font-size: 9px; padding: 2px 5px;">🌐 Proxy</span>
+                  <span class="status-badge" style="background: rgba(16, 185, 129, 0.08); color: var(--accent-green); font-size: 9px; padding: 2px 5px; display: flex; align-items: center; gap: 4px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                    Proxy
+                  </span>
                 {/if}
                 {#if platform.riskLevel === 'HIGH'}
-                  <span class="status-badge" style="background: rgba(239, 68, 68, 0.08); color: var(--accent-red); font-size: 9px; padding: 2px 5px;">⚠️ High Risk</span>
+                  <span class="status-badge" style="background: rgba(239, 68, 68, 0.08); color: var(--accent-red); font-size: 9px; padding: 2px 5px; display: flex; align-items: center; gap: 4px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    High Risk
+                  </span>
                 {/if}
                 {#if result?.data?.confidence === 'LOW'}
-                  <span class="status-badge" style="background: rgba(245, 158, 11, 0.08); color: var(--accent-orange, #f59e0b); font-size: 9px; padding: 2px 5px; border: 1px solid rgba(245, 158, 11, 0.2);" title={scanner.language === 'vi' ? 'Thu thập sử dụng cơ chế dự phòng do giới hạn môi trường' : 'Fallback crawler used due to sandbox limitations'}>
-                    ⚠️ {scanner.language === 'vi' ? 'Tin cậy thấp' : 'Low Confidence'}
+                  <span class="status-badge" style="background: rgba(245, 158, 11, 0.08); color: var(--accent-orange, #f59e0b); font-size: 9px; padding: 2px 5px; border: 1px solid rgba(245, 158, 11, 0.2); display: flex; align-items: center; gap: 4px;" title={scanner.language === 'vi' ? 'Thu thập sử dụng cơ chế dự phòng do giới hạn môi trường' : 'Fallback crawler used due to sandbox limitations'}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    {scanner.language === 'vi' ? 'Tin cậy thấp' : 'Low Confidence'}
                   </span>
                 {/if}
               </div>

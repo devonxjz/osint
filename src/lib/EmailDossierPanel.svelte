@@ -26,8 +26,9 @@
         <span class="pulse-dot" class:active={scanner.isScanning}></span>
         <span class="status-text">{scanner.isScanning ? scanner.t.intelGathering : scanner.t.intelComplete}</span>
       </div>
-      <h2 class="target-title-display">
-        📧 {scanner.target.trim()}
+      <h2 class="target-title-display" style="display: flex; align-items: center; gap: 8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+        {scanner.target.trim()}
       </h2>
       <div class="metadata-grid">
         <div class="meta-item">
@@ -43,7 +44,7 @@
         <div class="meta-item">
           <span class="meta-label">{scanner.t.dbCompromises}</span>
           <span class="meta-value" style="color: {breaches.length > 0 ? 'var(--accent-red)' : 'var(--accent-green)'}">
-            {breaches.length > 0 ? `⚠️ ${breaches.length} Breach(es)` : scanner.t.cleanStatus}
+            {breaches.length > 0 ? `${breaches.length} Breach(es)` : scanner.t.cleanStatus}
           </span>
         </div>
       </div>
@@ -64,7 +65,10 @@
               <div class="badge-text-group">
                 <span class="id-name">{identity.realName}</span>
                 {#if identity.employer || identity.position}
-                  <span class="id-loc">💼 {identity.position || 'Employee'} at {identity.employer || 'Unknown Employer'}</span>
+                  <span class="id-loc" style="display: flex; align-items: center; gap: 4px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+                    {identity.position || 'Employee'} at {identity.employer || 'Unknown Employer'}
+                  </span>
                 {:else}
                   <span class="id-loc">{scanner.t.publicFootprintMatch}</span>
                 {/if}

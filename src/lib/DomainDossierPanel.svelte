@@ -617,25 +617,29 @@
         {/if}
 
         <!-- Floating Graph Controls Panel (Vertical Stack like Obsidian) -->
-        <div class="graph-controls-panel">
-          <button onclick={fitView} title="Fit Graph View">
-            <span>🎯</span>
+        <div class="graph-controls-panel" style="display: flex; flex-direction: column; gap: 8px; align-items: center;">
+          <button onclick={fitView} title="Fit Graph View" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; width: 56px; border-radius: 8px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
             <span>Fit</span>
           </button>
-          <button onclick={runAutoLayout} title="Rearrange Layout">
-            <span>🔄</span>
+          <button onclick={runAutoLayout} title="Rearrange Layout" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; width: 56px; border-radius: 8px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
             <span>Layout</span>
           </button>
-          <button onclick={() => isLabelsVisible = !isLabelsVisible} title="Toggle Node Labels">
-            <span>{isLabelsVisible ? '🙈' : '👁️'}</span>
+          <button onclick={() => isLabelsVisible = !isLabelsVisible} title="Toggle Node Labels" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; width: 56px; border-radius: 8px;">
+            {#if isLabelsVisible}
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+            {:else}
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            {/if}
             <span>Labels</span>
           </button>
-          <button onclick={exportPng} title="Export PNG Image">
-            <span>🖼️</span>
+          <button onclick={exportPng} title="Export PNG Image" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; width: 56px; border-radius: 8px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
             <span>PNG</span>
           </button>
-          <button onclick={exportJson} title="Export JSON Structure">
-            <span>💾</span>
+          <button onclick={exportJson} title="Export JSON Structure" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; width: 56px; border-radius: 8px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
             <span>JSON</span>
           </button>
         </div>
@@ -701,8 +705,9 @@
           <span class="pulse-dot" class:active={scanner.isScanning}></span>
           <span class="status-text">{scanner.isScanning ? scanner.t.auditingInfrastructure : scanner.t.auditComplete}</span>
         </div>
-        <h2 class="target-title-display">
-          🌐 {scanner.target.trim()}
+        <h2 class="target-title-display" style="display: flex; align-items: center; gap: 8px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+          {scanner.target.trim()}
         </h2>
         <div class="metadata-grid">
           <div class="meta-item">

@@ -6,7 +6,7 @@ import * as cheerio from 'cheerio';
 import { BaseEngine, EngineScanOptions } from './base';
 import { PlatformConfig } from '../registry';
 import { ScanResult } from '../scanner';
-import { htmlEngine, getRandomUserAgent, extractMetadata } from './htmlEngine';
+import { htmlEngine, getRandomUserAgent, extractMetadata, PlatformMetadata } from './htmlEngine';
 import { isSoft404 } from '../../shared/blacklist';
 
 export class BrowserEngine implements BaseEngine {
@@ -148,16 +148,10 @@ export class BrowserEngine implements BaseEngine {
       const html = await page.content();
       const responseTimeMs = Date.now() - startTime;
 
-      let parsedMetadata = { bio: null, displayName: null, avatar: null, location: null };
+      let parsedMetadata: PlatformMetadata = { bio: null, displayName: null, avatar: null, location: null };
 
       if (typeof html === 'string') {
-        const metadata = extractMetadata(html, platform.name);
-        parsedMetadata = {
-          bio: metadata.bio as any,
-          displayName: metadata.displayName as any,
-          avatar: metadata.avatar as any,
-          location: metadata.location as any
-        };
+        parsedMetadata = extractMetadata(html, platform.name);
         if (isSoft404(html, username, parsedMetadata.bio)) {
           return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
         }

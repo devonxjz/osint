@@ -167,13 +167,7 @@ class BrowserEngine {
             const responseTimeMs = Date.now() - startTime;
             let parsedMetadata = { bio: null, displayName: null, avatar: null, location: null };
             if (typeof html === 'string') {
-                const metadata = (0, htmlEngine_1.extractMetadata)(html, platform.name);
-                parsedMetadata = {
-                    bio: metadata.bio,
-                    displayName: metadata.displayName,
-                    avatar: metadata.avatar,
-                    location: metadata.location
-                };
+                parsedMetadata = (0, htmlEngine_1.extractMetadata)(html, platform.name);
                 if ((0, blacklist_1.isSoft404)(html, username, parsedMetadata.bio)) {
                     return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
                 }

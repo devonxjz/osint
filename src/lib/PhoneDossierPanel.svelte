@@ -21,8 +21,9 @@
         <span class="pulse-dot" class:active={scanner.isScanning}></span>
         <span class="status-text">{scanner.isScanning ? scanner.t.scanInProgress : scanner.t.scanComplete}</span>
       </div>
-      <h2 class="target-title-display">
-        📞 {val?.formatted || dossier.phone}
+      <h2 class="target-title-display" style="display: flex; align-items: center; gap: 8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+        {val?.formatted || dossier.phone}
       </h2>
       <div class="metadata-grid">
         <div class="meta-item">
@@ -52,7 +53,10 @@
               <div class="avatar-stub">{caller.realName.slice(0, 2).toUpperCase()}</div>
               <div class="badge-text-group">
                 <span class="id-name">{caller.realName}</span>
-                <span class="id-loc">📍 {caller.location || scanner.t.unknownLocation}</span>
+                <span class="id-loc" style="display: flex; align-items: center; gap: 4px;">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                  {caller.location || scanner.t.unknownLocation}
+                </span>
               </div>
             </div>
             <div class="details-list">

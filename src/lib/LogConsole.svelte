@@ -40,8 +40,9 @@
             const logText = scanner.logs.join('\n');
             navigator.clipboard.writeText(logText);
           }}
-          style="font-family: var(--font-sans); font-size: 11px; padding: 3px 8px; border-radius: 6px; background: rgba(255,255,255,0.06); border: 1px solid var(--border-color); color: var(--text-primary); cursor: pointer; transition: all 0.2s; font-weight: 600;"
+          style="display: flex; align-items: center; gap: 4px; font-family: var(--font-sans); font-size: 11px; padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,0.06); border: 1px solid var(--border-color); color: var(--text-primary); cursor: pointer; transition: all 0.2s; font-weight: 600;"
         >
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
           {scanner.t.copyLogs}
         </button>
       {/if}

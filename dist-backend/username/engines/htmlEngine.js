@@ -169,13 +169,7 @@ class HtmlEngine {
             const html = response.body;
             let parsedMetadata = { bio: null, displayName: null, avatar: null, location: null };
             if (typeof html === 'string') {
-                const metadata = extractMetadata(html, platform.name);
-                parsedMetadata = {
-                    bio: metadata.bio,
-                    displayName: metadata.displayName,
-                    avatar: metadata.avatar,
-                    location: metadata.location
-                };
+                parsedMetadata = extractMetadata(html, platform.name);
                 if ((0, blacklist_1.isSoft404)(html, username, parsedMetadata.bio)) {
                     return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
                 }

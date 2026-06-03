@@ -1,3 +1,22 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+/* Thin Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
 /* Elegant Glassmorphic Cyberpunk OSINT Design System */
 
 *, ::before, ::after {
@@ -10,7 +29,7 @@
   --bg-primary: hsl(var(--hue), 40%, 96%);
   --bg-secondary: hsla(var(--hue), 30%, 92%, 0.5);
   --bg-card: rgba(255, 255, 255, 0.7);
-  --border-color: rgba(255, 255, 255, 0.4);
+  --border-color: rgba(0, 0, 0, 0.08);
   --border-glow: rgba(0, 102, 255, 0.1);
   --text-primary: hsl(var(--hue), 30%, 15%);
   --text-secondary: hsl(var(--hue), 15%, 40%);
@@ -27,7 +46,7 @@
   --shadow-lg: 0 12px 48px 0 rgba(31, 38, 135, 0.12);
 
   --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'Geist Mono', 'Fira Code', 'Courier New', monospace;
+  --font-mono: 'Fira Code', 'Geist Mono', monospace;
 
   font-family: var(--font-sans);
   background-color: var(--bg-primary);

@@ -9,3 +9,5 @@ export { ScanSession } from './session_state';
 export { HttpFactory } from './http_factory';
 export { proxyClient } from './proxy_client';
 export { playwrightStealthClient } from './playwright_client';
+export { isSoft404, GLOBAL_HTML_BLACKLIST } from './blacklist';
+

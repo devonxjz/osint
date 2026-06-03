@@ -40,6 +40,7 @@ exports.extractMetadata = extractMetadata;
 const cheerio = __importStar(require("cheerio"));
 const undici_1 = require("undici");
 const evasionClient_1 = require("./evasionClient");
+const blacklist_1 = require("../../shared/blacklist");
 const evasionClient = new evasionClient_1.EvasionClient();
 const USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -166,45 +167,17 @@ class HtmlEngine {
                 return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
             }
             const html = response.body;
+            let parsedMetadata = { bio: null, displayName: null, avatar: null, location: null };
             if (typeof html === 'string') {
-                const lowerHtml = html.toLowerCase();
-                const GLOBAL_HTML_BLACKLIST = [
-                    'page not found',
-                    'profile not found',
-                    'user not found',
-                    'cannot be found',
-                    'could not be found',
-                    "we can't find that page",
-                    "page no longer exists",
-                    'no such user',
-                    'user does not exist',
-                    "user doesn't exist",
-                    'account does not exist',
-                    "account doesn't exist",
-                    'profile does not exist',
-                    "profile doesn't exist",
-                    'we have shut down stack overflow jobs',
-                    'story has been shut down',
-                    'story has been sunset',
-                    'không phải cứ biến mất là mất tích',
-                    'trang này thì mất tích thật rồi',
-                    'liên kết không hoạt động hoặc trang này không còn nữa',
-                    'sorry, that page does not exist',
-                    "page you're looking for could not be found",
-                    'there was an error on the server',
-                    'the server returned this error',
-                    'error! there was an error on the server'
-                ];
                 const metadata = extractMetadata(html, platform.name);
-                const bio = (metadata.bio || '').toLowerCase();
-                const lowerUsername = (username || '').toLowerCase();
-                for (const phrase of GLOBAL_HTML_BLACKLIST) {
-                    if (lowerHtml.includes(phrase)) {
-                        if (bio.includes(phrase) || lowerUsername.includes(phrase)) {
-                            continue;
-                        }
-                        return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
-                    }
+                parsedMetadata = {
+                    bio: metadata.bio,
+                    displayName: metadata.displayName,
+                    avatar: metadata.avatar,
+                    location: metadata.location
+                };
+                if ((0, blacklist_1.isSoft404)(html, username, parsedMetadata.bio)) {
+                    return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
                 }
             }
             if (platform.checkType === 'status' && status === platform.checkValue) {
@@ -227,13 +200,12 @@ class HtmlEngine {
             if (status >= 400) {
                 return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
             }
-            const metadata = typeof html === 'string' ? extractMetadata(html, platform.name) : { bio: null, avatar: null, location: null };
             return {
                 platform: platform.name,
                 status: 'FOUND',
                 url: targetUrl,
                 responseTimeMs,
-                ...metadata
+                ...parsedMetadata
             };
         }
         catch (error) {

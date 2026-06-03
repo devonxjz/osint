@@ -4,11 +4,11 @@
 
 import { z } from 'zod';
 
-export type SSEEventType = 'progress' | 'result' | 'end' | 'error';
+export type SSEEventType = 'progress' | 'result' | 'end' | 'error' | 'verified';
 
 // Outbound validation schema for SSE payloads to protect client EventSource
 const ssePayloadSchema = z.object({
-  event: z.enum(['progress', 'result', 'end', 'error']),
+  event: z.enum(['progress', 'result', 'end', 'error', 'verified']),
   data: z.any()
 });
 

@@ -7,6 +7,10 @@ import { ProxyAgent } from 'undici';
 import { BaseEngine, EngineScanOptions } from './base';
 import { PlatformConfig } from '../registry';
 import { ScanResult } from '../scanner';
+import { EvasionClient } from './evasionClient';
+import { isSoft404 } from '../../shared/blacklist';
+
+const evasionClient = new EvasionClient();
 
 const USER_AGENTS = [
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -20,28 +24,33 @@ export function getRandomUserAgent(): string {
 
 interface PlatformMetadata {
   bio: string | null;
+  displayName: string | null;
   avatar: string | null;
   location: string | null;
 }
 
 export function extractMetadata(html: string, platformName: string): PlatformMetadata {
   const $ = cheerio.load(html);
-  const metadata: PlatformMetadata = { bio: null, avatar: null, location: null };
+  const metadata: PlatformMetadata = { bio: null, displayName: null, avatar: null, location: null };
 
   try {
     if (platformName === 'GitHub') {
       metadata.avatar = $('meta[property="og:image"]').attr('content') || null;
       metadata.bio = $('.p-note div').text().trim() || $('meta[property="og:description"]').attr('content') || null;
+      metadata.displayName = $('.p-name').text().trim() || $('meta[property="og:title"]').attr('content')?.split(' · ')[0] || null;
       metadata.location = $('span[itemprop="homeLocation"]').text().trim() || null;
     } else if (platformName === 'GitLab') {
       metadata.avatar = $('.avatar-jpg').attr('src') || null;
       metadata.bio = $('.user-profile-bio').text().trim() || null;
+      metadata.displayName = $('.user-profile-name').text().trim() || null;
     } else if (platformName === 'Medium') {
       metadata.avatar = $('meta[property="og:image"]').attr('content') || null;
       metadata.bio = $('meta[name="description"]').attr('content') || null;
+      metadata.displayName = $('meta[property="og:title"]').attr('content')?.replace(' – Medium', '') || null;
     } else {
       metadata.avatar = $('meta[property="og:image"]').attr('content') || $('meta[name="twitter:image"]').attr('content') || null;
       metadata.bio = $('meta[property="og:description"]').attr('content') || $('meta[name="description"]').attr('content') || null;
+      metadata.displayName = $('meta[property="og:title"]').attr('content') || $('title').text().trim() || null;
     }
 
     if (metadata.avatar && metadata.avatar.startsWith('//')) {
@@ -93,8 +102,19 @@ export class HtmlEngine implements BaseEngine {
     }
 
     try {
-      const headers: Record<string, string> = { 
-        'User-Agent': userAgent
+      const headers: Record<string, string> = {
+        'sec-ch-ua': '"Not A(Brand";v="99", "Google Chrome";v="121"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'upgrade-insecure-requests': '1',
+        'User-Agent': userAgent,
+        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'sec-fetch-site': 'none',
+        'sec-fetch-mode': 'navigate',
+        'sec-fetch-user': '?1',
+        'sec-fetch-dest': 'document',
+        'accept-encoding': 'gzip, deflate, br',
+        'accept-language': 'en-US,en;q=0.9',
       };
 
       if (cookie) {
@@ -103,76 +123,58 @@ export class HtmlEngine implements BaseEngine {
 
       // Native ProxyAgent configuration via Undici
       let dispatcher: any = undefined;
-      if (platform.requiresProxy && process.env.PROXY_POOL_URL) {
-        dispatcher = new ProxyAgent(process.env.PROXY_POOL_URL);
+      const proxyUrl = options.proxyUrl || (platform.requiresProxy ? process.env.PROXY_POOL_URL : undefined);
+      if (proxyUrl) {
+        dispatcher = new ProxyAgent(proxyUrl);
       } else if (platform.category === 'DarkWeb') {
         const torProxy = process.env.TOR_PROXY_URL || 'socks5://127.0.0.1:9050';
         dispatcher = new ProxyAgent(torProxy);
       }
 
-      const response = await fetch(targetUrl, {
+      const response = await evasionClient.request(targetUrl, {
         headers,
         signal: controller.signal,
         dispatcher
-      } as any);
+      });
       clearTimeout(timeoutId);
 
       const responseTimeMs = Date.now() - startTime;
       const status = response.status;
 
       if (status === 429 || status === 403) {
-        return { 
-          platform: platform.name, 
-          status: 'NOT_FOUND', 
-          url: targetUrl, 
+        return {
+          platform: platform.name,
+          status: 'NOT_FOUND',
+          url: targetUrl,
           error: 'BLOCKED_BY_WAF',
           responseTimeMs
         };
       }
 
-      const html = await response.text();
+      // Soft 404 Redirect Detection (e.g. MeWe redirects non-existent users to mewe.com/404 with 200 OK status)
+      if (response.url && (
+        response.url.endsWith('/404') ||
+        response.url.includes('/404') ||
+        response.url.includes('/error/404') ||
+        response.url.endsWith('/error')
+      )) {
+        return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
+      }
+
+      const html = response.body;
+
+      let parsedMetadata = { bio: null, displayName: null, avatar: null, location: null };
 
       if (typeof html === 'string') {
-        const lowerHtml = html.toLowerCase();
-        const GLOBAL_HTML_BLACKLIST = [
-          'page not found',
-          'profile not found',
-          'user not found',
-          'cannot be found',
-          'could not be found',
-          "we can't find that page",
-          "page no longer exists",
-          'no such user',
-          'user does not exist',
-          "user doesn't exist",
-          'account does not exist',
-          "account doesn't exist",
-          'profile does not exist',
-          "profile doesn't exist",
-          'we have shut down stack overflow jobs',
-          'story has been shut down',
-          'story has been sunset',
-          'không phải cứ biến mất là mất tích',
-          'trang này thì mất tích thật rồi',
-          'liên kết không hoạt động hoặc trang này không còn nữa',
-          'sorry, that page does not exist',
-          "page you're looking for could not be found",
-          'there was an error on the server',
-          'the server returned this error',
-          'error! there was an error on the server'
-        ];
-
         const metadata = extractMetadata(html, platform.name);
-        const bio = (metadata.bio || '').toLowerCase();
-        const lowerUsername = (username || '').toLowerCase();
-
-        for (const phrase of GLOBAL_HTML_BLACKLIST) {
-          if (lowerHtml.includes(phrase)) {
-            if (bio.includes(phrase) || lowerUsername.includes(phrase)) {
-              continue;
-            }
-            return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
-          }
+        parsedMetadata = {
+          bio: metadata.bio as any,
+          displayName: metadata.displayName as any,
+          avatar: metadata.avatar as any,
+          location: metadata.location as any
+        };
+        if (isSoft404(html, username, parsedMetadata.bio)) {
+          return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
         }
       }
 
@@ -201,13 +203,12 @@ export class HtmlEngine implements BaseEngine {
         return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
       }
 
-      const metadata = typeof html === 'string' ? extractMetadata(html, platform.name) : { bio: null, avatar: null, location: null };
       return {
         platform: platform.name,
         status: 'FOUND',
         url: targetUrl,
         responseTimeMs,
-        ...metadata
+        ...parsedMetadata
       };
 
     } catch (error: any) {

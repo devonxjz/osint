@@ -1,9 +1,13 @@
 'use strict';
 
-const axios = require('axios');
+const { evasionClient } = require('../dist-backend/username/engines/evasionClient');
 const { lookupCallerID } = require('../dist-backend/phone/caller_id');
 
-jest.mock('axios');
+jest.mock('../dist-backend/username/engines/evasionClient', () => ({
+  evasionClient: {
+    request: jest.fn()
+  }
+}));
 
 describe('Phone Reverse Caller ID Engine', () => {
   beforeEach(() => {
@@ -28,30 +32,31 @@ describe('Phone Reverse Caller ID Engine', () => {
     expect(['New York, USA', 'California, USA', 'Texas, USA', 'Washington, USA']).toContain(resUS.location);
   });
 
-  // Behavior 2: Twilio Integration with Axios
+  // Behavior 2: Twilio Integration with evasionClient
   test('calls Twilio API with Basic Auth when credentials are provided', async () => {
     process.env.TWILIO_ACCOUNT_SID = 'AC_test_sid';
     process.env.TWILIO_AUTH_TOKEN = 'test_token';
 
-    axios.get.mockResolvedValueOnce({
-      data: {
+    evasionClient.request.mockResolvedValueOnce({
+      status: 200,
+      headers: {},
+      body: JSON.stringify({
         caller_name: {
           caller_name: 'John Doe'
         },
         line_type_intelligence: {
           carrier_name: 'Verizon Wireless'
         }
-      }
+      })
     });
 
     const result = await lookupCallerID('+12025550143');
 
-    expect(axios.get).toHaveBeenCalledWith(
+    expect(evasionClient.request).toHaveBeenCalledWith(
       'https://lookups.twilio.com/v2/PhoneNumbers/%2B12025550143?Fields=line_type_intelligence,caller_name',
       expect.objectContaining({
-        auth: {
-          username: 'AC_test_sid',
-          password: 'test_token'
+        headers: {
+          'Authorization': 'Basic QUNfdGVzdF9zaWQ6dGVzdF90b2tlbg=='
         }
       })
     );
@@ -65,13 +70,15 @@ describe('Phone Reverse Caller ID Engine', () => {
     process.env.TWILIO_ACCOUNT_SID = 'AC_test_sid';
     process.env.TWILIO_AUTH_TOKEN = 'test_token';
 
-    axios.get.mockResolvedValueOnce({
-      data: {
+    evasionClient.request.mockResolvedValueOnce({
+      status: 200,
+      headers: {},
+      body: JSON.stringify({
         caller_name: null,
         line_type_intelligence: {
           carrier_name: 'Viettel'
         }
-      }
+      })
     });
 
     const result = await lookupCallerID('+84987654321');
@@ -83,12 +90,12 @@ describe('Phone Reverse Caller ID Engine', () => {
     expect(result.sources).toContain('Deterministic Fallback');
   });
 
-  // Behavior 4: Graceful Axios errors fallback
+  // Behavior 4: Graceful evasionClient errors fallback
   test('falls back gracefully if Twilio API call fails', async () => {
     process.env.TWILIO_ACCOUNT_SID = 'AC_test_sid';
     process.env.TWILIO_AUTH_TOKEN = 'test_token';
 
-    axios.get.mockRejectedValueOnce(new Error('API Timeout'));
+    evasionClient.request.mockRejectedValueOnce(new Error('API Timeout'));
 
     const result = await lookupCallerID('+84987654321');
     expect(result.realName).not.toBeNull();

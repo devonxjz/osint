@@ -1,6 +1,5 @@
 'use strict';
 
-const axios = require('axios');
 const app = require('../dist-backend/index').default;
 const { orchestratePhoneScan } = require('../dist-backend/phone');
 
@@ -65,16 +64,15 @@ describe('Phone Scan Orchestrator Module', () => {
 
   // Behavior 4: Express Endpoint integration returns a text/event-stream
   test('GET /api/scan-phone returns SSE text/event-stream', async () => {
-    const response = await axios.get(`${baseUrl}/api/scan-phone?target=%2B84987654321`, {
-      responseType: 'text'
-    });
+    const response = await fetch(`${baseUrl}/api/scan-phone?target=%2B84987654321`);
 
     expect(response.status).toBe(200);
-    expect(response.headers['content-type']).toContain('text/event-stream');
-    expect(response.data).toContain('event: result');
-    expect(response.data).toContain('validation');
-    expect(response.data).toContain('caller_id');
-    expect(response.data).toContain('event: end');
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    const text = await response.text();
+    expect(text).toContain('event: result');
+    expect(text).toContain('validation');
+    expect(text).toContain('caller_id');
+    expect(text).toContain('event: end');
   });
 
   // Behavior 5: Per-lane error isolation — one lane crash should not kill the entire scan

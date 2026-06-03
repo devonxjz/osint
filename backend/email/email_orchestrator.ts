@@ -8,6 +8,7 @@ import { lookupBreaches, BreachRecord } from './breach_engine';
 import { lookupGravatar, GravatarResult } from './gravatar';
 import { resolveIdentity, IdentityResult } from './identity_resolver';
 import { generateEmailPermutations, PermutationOutput } from './permutation_engine';
+import { ScanSession } from '../shared/session_state';
 
 export interface EmailDossier {
   email: string;
@@ -23,6 +24,7 @@ export interface EmailDossier {
 export interface OrchestrateEmailScanOptions {
   onEvent?: (event: { module: string; status: string; data: any }) => void;
   hibpApiKey?: string | null;
+  session?: ScanSession;
 }
 
 /**
@@ -42,7 +44,7 @@ export interface OrchestrateEmailScanOptions {
  * @returns Consolidated dossier
  */
 export async function orchestrateEmailScan(email: string, options: OrchestrateEmailScanOptions = {}): Promise<EmailDossier> {
-  const { onEvent = () => {}, hibpApiKey = null } = options;
+  const { onEvent = () => {}, hibpApiKey = null, session } = options;
   const startTime = Date.now();
 
   const dossier: EmailDossier = {
@@ -88,7 +90,7 @@ export async function orchestrateEmailScan(email: string, options: OrchestrateEm
     (async () => {
       try {
         await stagger(600);
-        const result = await lookupBreaches(email, { hibpApiKey });
+        const result = await lookupBreaches(email, { hibpApiKey, session });
         onEvent({ module: 'breach', status: result.breaches.length > 0 ? 'FOUND' : 'CLEAN', data: result });
         return result;
       } catch (err: any) {
@@ -101,7 +103,7 @@ export async function orchestrateEmailScan(email: string, options: OrchestrateEm
     (async (): Promise<GravatarResult> => {
       try {
         await stagger(900);
-        const result = await lookupGravatar(email);
+        const result = await lookupGravatar(email, session);
         onEvent({ module: 'gravatar', status: result.hasGravatar ? 'FOUND' : 'NOT_FOUND', data: result });
         return result;
       } catch (err: any) {

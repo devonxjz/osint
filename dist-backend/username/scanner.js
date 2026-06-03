@@ -5,11 +5,12 @@ exports.scanPlatform = scanPlatform;
 const apiEngine_1 = require("./engines/apiEngine");
 const htmlEngine_1 = require("./engines/htmlEngine");
 const browserEngine_1 = require("./engines/browserEngine");
+const impersonateEngine_1 = require("./engines/impersonateEngine");
 /**
  * Polymorphic Scan Platform Router
  * Delegates the scan target query to the appropriate specialized engine.
  */
-async function scanPlatform(username, platform, cookieOverrides = {}, signal = null) {
+async function scanPlatform(username, platform, cookieOverrides = {}, signal = null, options = {}) {
     let engine;
     if (platform.checkType === 'api') {
         engine = apiEngine_1.apiEngine;
@@ -17,8 +18,11 @@ async function scanPlatform(username, platform, cookieOverrides = {}, signal = n
     else if (platform.checkType === 'browser') {
         engine = browserEngine_1.browserEngine;
     }
+    else if (platform.checkType === 'impersonate') {
+        engine = impersonateEngine_1.impersonateEngine;
+    }
     else {
         engine = htmlEngine_1.htmlEngine; // status, text, selector
     }
-    return engine.scan(username, platform, { cookieOverrides, signal });
+    return engine.scan(username, platform, { cookieOverrides, signal, ...options });
 }

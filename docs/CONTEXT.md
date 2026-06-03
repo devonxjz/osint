@@ -11,12 +11,13 @@
 * **Parallel Harvest Queue**: An asynchronous Node.js execution pipeline that gathers DNS, live page trackers, robots.txt exclusions, Wayback CDX snapshots, and search dorks concurrently, protected by individual 2500ms timeouts.
 * **Investigator Workbench**: An interactive graph dashboard driven by Cytoscape.js featuring quick floating controls, node group filtering, and a sliding detail panel with contextual "Click-to-Investigate" action bindings.
 * **Lightweight Document Crawler**: A fail-safe metadata extraction engine that queries public search APIs and performs partial HTTP Range requests (capped at 48KB) to parse document headers without full binary downloads.
-* **Identity Resolution (Name Scan)**: The process of mapping full names to candidate username variants and querying social platforms to aggregate digital footprint confidence scores (HIGH, MEDIUM, LOW).
+* **Identity Resolution (Name Scan)**: The process of mapping full names to candidate username variants, querying social platforms, and executing confidence-scored multi-signal matching (Layer 1: Variant Generation, Layer 2: Profile Verification with Levenshtein-based name matching and bio token searches, Layer 3: Cross-Platform Correlation via pairwise avatar URL comparison) to aggregate digital footprint confidence scores (HIGH, MEDIUM, LOW) within a streaming timeout budget.
 * **Phone Intelligence**: Dynamic E.164 phone validation, carrier prefix analysis, Caller ID parsing, and OTT profile resolution.
 * **Unified Scan Endpoint**: A consolidated EventSource route `/api/scan` that classifies the 5 target vectors and orchestrates all scans concurrently through a single Express handler.
 * **Polymorphic OSINT Engine**: A multi-tiered crawling architecture routing username targets across three dedicated scraping layers: API, HTML, and Browser (Playwright).
 * **Dynamic Concurrency Lanes**: Three separate, parallel execution queues (API, HTML, and Browser) protecting target system resources (capping Playwright at 2 threads) while maximizing unauthenticated API lanes to 30 threads.
-* **Hybrid Playwright Fallback**: The automatic mechanism that detects Vercel hosting (`process.env.VERCEL`) to bypass local browser rendering, downgrading to high-evasion Axios network queries to fit serverless environment limits.
+* **Hybrid Evasion Architecture**: The request routing system that detects the current environment and automatically chooses between local high-stealth Playwright browser rendering and serverless-friendly network clients (impersonation or API proxy wrappers) to bypass WAF detection.
+* **Adaptive Session State Promotion**: The mechanism that monitors WAF challenges in an isolated scan session. Once blocks exceed a defined threshold, the session automatically upgrades all remaining requests to bypass basic connections and query directly through a high-evasion proxy.
 * **Abort Propagation**: The mechanism of forwarding `AbortSignal` down the entire OSINT engine execution chain; any `AbortError` must be handled silently (silent exit) without polluting logs or SSE streams.
 
 ## System Architecture

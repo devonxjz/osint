@@ -6,3 +6,4 @@ export * from './base';
 export * from './apiEngine';
 export * from './htmlEngine';
 export * from './browserEngine';
+export * from './impersonateEngine';

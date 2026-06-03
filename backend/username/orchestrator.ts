@@ -3,6 +3,7 @@
 'use strict';
 
 import { scanPlatform, Platform, ScanResult } from './scanner';
+import { ScanSession } from '../shared/session_state';
 
 interface CircuitBreakerState {
   consecutiveFailures: number;
@@ -30,6 +31,8 @@ export interface OrchestrateOptions {
   retryBaseDelayMs?: number;
   cache?: any;
   signal?: AbortSignal | null;
+  cookies?: Record<string, string>;
+  session?: ScanSession;
 }
 
 export async function orchestrateScan(
@@ -55,6 +58,11 @@ export async function orchestrateScan(
   let foundCount = 0;
 
   const isAborted = () => signal && signal.aborted;
+
+  let sharedBrowser: any = null;
+  let sharedContext: any = null;
+  let sessionProxyOverride: string | undefined = undefined;
+  let sessionBlockedCount = 0;
 
   // 1. Check cache first
   const remainingPlatforms: Platform[] = [];
@@ -112,6 +120,12 @@ export async function orchestrateScan(
         const currentIdx = index++;
         const platform = platformList[currentIdx];
 
+        // Introduce randomized request delay (jitter) to prevent burst rate limit triggers
+        if (currentIdx > 0 && !isAborted() && process.env.NODE_ENV !== 'test') {
+          const jitterDelay = Math.floor(Math.random() * 250) + 50; // 50ms to 300ms random delay
+          await delay(jitterDelay);
+        }
+
         // Check Circuit Breaker
         const cbState = circuitBreakers[platform.name];
         if (cbState && cbState.trippedUntil && Date.now() < cbState.trippedUntil) {
@@ -129,9 +143,56 @@ export async function orchestrateScan(
         let success = false;
         let attempt = 0;
 
+        const cookies = options.cookies || {};
         while (attempt <= retryAttempts && !success && !isAborted()) {
           try {
-            result = await scanPlatform(target, platform, {}, signal);
+            if (options.session?.shouldUseProxy() && !sessionProxyOverride) {
+              sessionProxyOverride = process.env.PROXY_POOL_URL;
+            }
+
+            result = await scanPlatform(target, platform, cookies, signal, {
+              sharedContext,
+              proxyUrl: sessionProxyOverride,
+              session: options.session
+            });
+
+            // Check if WAF block is identified
+            const isBlocked = result.error === 'BLOCKED_BY_WAF' ||
+              (result.status === 'NOT_FOUND' && (
+                result.error?.includes('403') ||
+                result.error?.includes('429') ||
+                result.error?.includes('ECONNRESET') ||
+                result.error?.includes('connection reset') ||
+                (result as any).body?.includes('cf-challenge') ||
+                (result as any).body?.includes('Just a moment...')
+              ));
+
+            if (isBlocked && process.env.PROXY_POOL_URL) {
+              sessionBlockedCount++;
+              if (options.session) {
+                options.session.recordWAFHit();
+              }
+
+              // Perform per-platform instant retry first if session-wide override is not yet active
+              if (!sessionProxyOverride) {
+                console.log(`[orchestrateScan] WAF block detected on ${platform.name}. Retrying this specific platform with proxy...`);
+                try {
+                  result = await scanPlatform(target, platform, cookies, signal, {
+                    sharedContext,
+                    proxyUrl: process.env.PROXY_POOL_URL,
+                    session: options.session
+                  });
+                } catch (retryErr) {
+                  // ignore, original result remains
+                }
+              }
+
+              // Only activate session-wide proxy if threshold is met
+              if ((sessionBlockedCount >= 3 || options.session?.shouldUseProxy()) && !sessionProxyOverride) {
+                console.log(`[orchestrateScan] WAF block threshold (>=3) reached. Activating session-wide proxy pool for subsequent requests.`);
+                sessionProxyOverride = process.env.PROXY_POOL_URL;
+              }
+            }
             
             // Check for permanent vs transient failure inside resolved result
             if (result.error === 'MISSING_SESSION_CREDENTIALS' || result.status === 'FOUND' || !result.error) {
@@ -139,7 +200,9 @@ export async function orchestrateScan(
             } else {
               attempt++;
               if (attempt <= retryAttempts && !isAborted()) {
-                await delay(retryBaseDelayMs * Math.pow(2, attempt - 1));
+                const jitter = 100;
+                const backoffDelay = retryBaseDelayMs * Math.pow(2, attempt) + Math.floor(Math.random() * jitter);
+                await delay(backoffDelay);
               }
             }
           } catch (err: any) {
@@ -147,7 +210,9 @@ export async function orchestrateScan(
 
             attempt++;
             if (attempt <= retryAttempts && !isAborted()) {
-              await delay(retryBaseDelayMs * Math.pow(2, attempt - 1));
+              const jitter = 100;
+              const backoffDelay = retryBaseDelayMs * Math.pow(2, attempt) + Math.floor(Math.random() * jitter);
+              await delay(backoffDelay);
             } else {
               result = {
                 platform: platform.name,
@@ -213,12 +278,70 @@ export async function orchestrateScan(
 
   // Run all four concurrency lanes in parallel
   // Order of scheduling guarantees standard HTML runs before high-risk for executionOrder testing
-  await Promise.all([
-    runLane(apiPlatforms, apiConcurrency),
-    runLane(standardHtmlPlatforms, htmlConcurrency),
-    runLane(highRiskHtmlPlatforms, highRiskConcurrency),
-    runLane(browserPlatforms, browserConcurrency)
-  ]);
+  try {
+    if (browserPlatforms.length > 0 && !process.env.VERCEL) {
+      try {
+        const playwright = require('playwright');
+        sharedBrowser = await playwright.chromium.launch({
+          headless: true,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-blink-features=AutomationControlled'
+          ]
+        });
+
+        sharedContext = await sharedBrowser.newContext({
+          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          locale: 'en-US',
+          viewport: { width: 1280, height: 720 },
+          deviceScaleFactor: 1,
+          isMobile: false,
+          hasTouch: false
+        });
+
+        // Inject standard stealth properties inside context before scan starts (navigator.webdriver = false, WebGL, Canvas)
+        const sessionSeed = Math.floor(Math.random() * 256);
+        await sharedContext.addInitScript((seed: number) => {
+          Object.defineProperty(navigator, 'webdriver', { get: () => false });
+          // WebGL spoofing
+          const getParameter = WebGLRenderingContext.prototype.getParameter;
+          WebGLRenderingContext.prototype.getParameter = function(parameter: number) {
+            if (parameter === 37445) return 'Intel Inc.'; // UNMASKED_VENDOR_WEBGL
+            if (parameter === 37446) return 'Intel(R) Iris(TM) Plus Graphics 640'; // UNMASKED_RENDERER_WEBGL
+            return getParameter.apply(this, [parameter]);
+          };
+          // Canvas math noise spoofing
+          const getImageData = CanvasRenderingContext2D.prototype.getImageData;
+          CanvasRenderingContext2D.prototype.getImageData = function(x: number, y: number, w: number, h: number) {
+            const imageData = getImageData.apply(this, [x, y, w, h]);
+            for (let i = 0; i < imageData.data.length; i += 4) {
+              const offset = (seed + i + Math.floor(Math.random() * 3)) % 3;
+              imageData.data[i] = (imageData.data[i] + offset) % 256;
+            }
+            return imageData;
+          };
+        }, sessionSeed);
+      } catch (e) {
+        console.error('[orchestrateScan] Playwright failed to initialize shared browser context', e);
+      }
+    }
+
+    await Promise.all([
+      runLane(apiPlatforms, apiConcurrency),
+      runLane(standardHtmlPlatforms, htmlConcurrency),
+      runLane(highRiskHtmlPlatforms, highRiskConcurrency),
+      runLane(browserPlatforms, browserConcurrency)
+    ]);
+  } finally {
+    if (sharedBrowser) {
+      try {
+        await sharedBrowser.close();
+      } catch (e) {
+        // ignore
+      }
+    }
+  }
 
   return {
     foundCount,

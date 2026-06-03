@@ -7,6 +7,7 @@ import { BaseEngine } from './engines/base';
 import { apiEngine } from './engines/apiEngine';
 import { htmlEngine } from './engines/htmlEngine';
 import { browserEngine } from './engines/browserEngine';
+import { impersonateEngine } from './engines/impersonateEngine';
 
 export type Platform = PlatformConfig;
 
@@ -17,8 +18,12 @@ export interface ScanResult {
   error?: string;
   responseTimeMs?: number;
   bio?: string | null;
+  displayName?: string | null;
   avatar?: string | null;
   location?: string | null;
+  confidence?: 'HIGH' | 'LOW';
+  method?: string;
+  fallbackReason?: 'binary_missing' | 'vercel_env';
 }
 
 /**
@@ -29,7 +34,8 @@ export async function scanPlatform(
   username: string,
   platform: Platform,
   cookieOverrides: Record<string, string> = {},
-  signal: AbortSignal | null = null
+  signal: AbortSignal | null = null,
+  options: any = {}
 ): Promise<ScanResult> {
   let engine: BaseEngine;
 
@@ -37,9 +43,11 @@ export async function scanPlatform(
     engine = apiEngine;
   } else if (platform.checkType === 'browser') {
     engine = browserEngine;
+  } else if (platform.checkType === 'impersonate') {
+    engine = impersonateEngine;
   } else {
     engine = htmlEngine; // status, text, selector
   }
 
-  return engine.scan(username, platform, { cookieOverrides, signal });
+  return engine.scan(username, platform, { cookieOverrides, signal, ...options });
 }

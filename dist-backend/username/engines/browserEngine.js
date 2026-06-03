@@ -37,46 +37,87 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.browserEngine = exports.BrowserEngine = void 0;
 const cheerio = __importStar(require("cheerio"));
 const htmlEngine_1 = require("./htmlEngine");
+const blacklist_1 = require("../../shared/blacklist");
 class BrowserEngine {
     async scan(username, platform, options = {}) {
         const targetUrl = platform.url.replace('{}', encodeURIComponent(username));
         // Hybrid Production Fallback for Vercel Serverless environment
         if (process.env.VERCEL) {
             console.log(`[BrowserEngine] Vercel detected. Gracefully falling back to HtmlEngine for ${platform.name}`);
-            return htmlEngine_1.htmlEngine.scan(username, platform, options);
+            const result = await htmlEngine_1.htmlEngine.scan(username, platform, options);
+            return {
+                ...result,
+                confidence: 'LOW',
+                method: 'fallback',
+                fallbackReason: 'vercel_env'
+            };
         }
         const startTime = Date.now();
         const signal = options.signal || null;
-        // Dynamically import Playwright only when running locally to avoid load errors
-        let playwrightChromium;
-        try {
-            const playwright = require('playwright');
-            playwrightChromium = playwright.chromium;
-        }
-        catch (e) {
-            console.error('[BrowserEngine] Playwright is not available, falling back to HtmlEngine', e);
-            return htmlEngine_1.htmlEngine.scan(username, platform, options);
-        }
         let browser = null;
+        let context = options.sharedContext || null;
+        let page = null;
         try {
-            // Launch headless browser with high-evasion arguments
-            browser = await playwrightChromium.launch({
-                headless: true,
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-blink-features=AutomationControlled'
-                ]
-            });
-            const userAgent = (0, htmlEngine_1.getRandomUserAgent)();
-            const context = await browser.newContext({
-                userAgent,
-                locale: 'en-US',
-                viewport: { width: 1280, height: 720 },
-                deviceScaleFactor: 1,
-                isMobile: false,
-                hasTouch: false
-            });
+            if (!context) {
+                // Dynamically import Playwright only when running locally to avoid load errors
+                let playwrightChromium;
+                try {
+                    const playwright = require('playwright');
+                    playwrightChromium = playwright.chromium;
+                }
+                catch (e) {
+                    console.error('[BrowserEngine] Playwright is not available, falling back to HtmlEngine', e);
+                    const result = await htmlEngine_1.htmlEngine.scan(username, platform, options);
+                    return {
+                        ...result,
+                        confidence: 'LOW',
+                        method: 'fallback',
+                        fallbackReason: 'binary_missing'
+                    };
+                }
+                // Launch headless browser with high-evasion arguments
+                browser = await playwrightChromium.launch({
+                    headless: true,
+                    args: [
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-blink-features=AutomationControlled'
+                    ]
+                });
+                const userAgent = (0, htmlEngine_1.getRandomUserAgent)();
+                context = await browser.newContext({
+                    userAgent,
+                    locale: 'en-US',
+                    viewport: { width: 1280, height: 720 },
+                    deviceScaleFactor: 1,
+                    isMobile: false,
+                    hasTouch: false
+                });
+                // Inject standard stealth properties inside context before scan starts (navigator.webdriver = false, WebGL, Canvas)
+                const sessionSeed = Math.floor(Math.random() * 256);
+                await context.addInitScript((seed) => {
+                    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+                    // WebGL spoofing
+                    const getParameter = WebGLRenderingContext.prototype.getParameter;
+                    WebGLRenderingContext.prototype.getParameter = function (parameter) {
+                        if (parameter === 37445)
+                            return 'Intel Inc.'; // UNMASKED_VENDOR_WEBGL
+                        if (parameter === 37446)
+                            return 'Intel(R) Iris(TM) Plus Graphics 640'; // UNMASKED_RENDERER_WEBGL
+                        return getParameter.apply(this, [parameter]);
+                    };
+                    // Canvas math noise spoofing
+                    const getImageData = CanvasRenderingContext2D.prototype.getImageData;
+                    CanvasRenderingContext2D.prototype.getImageData = function (x, y, w, h) {
+                        const imageData = getImageData.apply(this, [x, y, w, h]);
+                        for (let i = 0; i < imageData.data.length; i += 4) {
+                            const offset = (seed + i + Math.floor(Math.random() * 3)) % 3;
+                            imageData.data[i] = (imageData.data[i] + offset) % 256;
+                        }
+                        return imageData;
+                    };
+                }, sessionSeed);
+            }
             // Secure Session Cookie injection if present
             const cookieOverrides = options.cookieOverrides || {};
             let cookie = undefined;
@@ -97,7 +138,7 @@ class BrowserEngine {
                     await context.addCookies(cookiesList);
                 }
             }
-            const page = await context.newPage();
+            page = await context.newPage();
             // Monitor AbortSignal to close page and browser immediately on client disconnect
             if (signal) {
                 if (signal.aborted) {
@@ -105,6 +146,8 @@ class BrowserEngine {
                 }
                 signal.addEventListener('abort', async () => {
                     try {
+                        if (page && !page.isClosed())
+                            await page.close();
                         if (browser)
                             await browser.close();
                     }
@@ -122,37 +165,17 @@ class BrowserEngine {
             await page.waitForTimeout(1500);
             const html = await page.content();
             const responseTimeMs = Date.now() - startTime;
+            let parsedMetadata = { bio: null, displayName: null, avatar: null, location: null };
             if (typeof html === 'string') {
-                const lowerHtml = html.toLowerCase();
-                // 1. Check for standard error pages or global blacklist phrases
-                const GLOBAL_HTML_BLACKLIST = [
-                    'page not found',
-                    'profile not found',
-                    'user not found',
-                    'cannot be found',
-                    'could not be found',
-                    "we can't find that page",
-                    "page no longer exists",
-                    'no such user',
-                    'user does not exist',
-                    "user doesn't exist",
-                    'account does not exist',
-                    "account doesn't exist",
-                    'profile does not exist',
-                    "profile doesn't exist",
-                    'sorry, that page does not exist',
-                    "page you're looking for could not be found"
-                ];
                 const metadata = (0, htmlEngine_1.extractMetadata)(html, platform.name);
-                const bio = (metadata.bio || '').toLowerCase();
-                const lowerUsername = (username || '').toLowerCase();
-                for (const phrase of GLOBAL_HTML_BLACKLIST) {
-                    if (lowerHtml.includes(phrase)) {
-                        if (bio.includes(phrase) || lowerUsername.includes(phrase)) {
-                            continue;
-                        }
-                        return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
-                    }
+                parsedMetadata = {
+                    bio: metadata.bio,
+                    displayName: metadata.displayName,
+                    avatar: metadata.avatar,
+                    location: metadata.location
+                };
+                if ((0, blacklist_1.isSoft404)(html, username, parsedMetadata.bio)) {
+                    return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
                 }
                 // 2. Platform match rules checkType
                 if (platform.checkType === 'text' && html.includes(platform.checkValue)) {
@@ -166,13 +189,12 @@ class BrowserEngine {
                 }
             }
             // If passed all not-found checks, target profile exists!
-            const metadata = (0, htmlEngine_1.extractMetadata)(html, platform.name);
             return {
                 platform: platform.name,
                 status: 'FOUND',
                 url: targetUrl,
                 responseTimeMs,
-                ...metadata
+                ...parsedMetadata
             };
         }
         catch (error) {
@@ -196,6 +218,14 @@ class BrowserEngine {
         }
         finally {
             // Complete resource cleanup is mandatory
+            if (page && !page.isClosed()) {
+                try {
+                    await page.close();
+                }
+                catch (e) {
+                    // ignore
+                }
+            }
             if (browser) {
                 try {
                     await browser.close();

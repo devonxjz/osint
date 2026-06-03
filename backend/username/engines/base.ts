@@ -8,6 +8,8 @@ import { ScanResult } from '../scanner';
 export interface EngineScanOptions {
   cookieOverrides?: Record<string, string>;
   signal?: AbortSignal | null;
+  sharedContext?: any;
+  proxyUrl?: string;
 }
 
 export interface BaseEngine {

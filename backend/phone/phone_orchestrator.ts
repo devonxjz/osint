@@ -1,12 +1,13 @@
 // backend/phone/phone_orchestrator.ts
-
+ 
 'use strict';
-
+ 
 import { validatePhone, PhoneValidationResult } from './validator';
 import * as callerIdModule from './caller_id';
 import * as peopleSearchModule from './people_search';
 import * as socialSyncModule from './social_sync';
-
+import { ScanSession } from '../shared/session_state';
+ 
 export interface PhoneDossier {
   phone: string;
   validation: PhoneValidationResult;
@@ -15,11 +16,12 @@ export interface PhoneDossier {
   socialSync?: socialSyncModule.SocialSyncResult;
   timeTakenMs: number;
 }
-
+ 
 export interface OrchestratePhoneScanOptions {
   onEvent?: (event: { module: string; status: string; data: any }) => void;
+  session?: ScanSession;
 }
-
+ 
 /**
  * Coordinates all phone intelligence scanning lanes concurrently.
  * Emits progress updates in real-time.
@@ -29,9 +31,9 @@ export interface OrchestratePhoneScanOptions {
  * @returns Consolidated telephone intelligence dossier
  */
 export async function orchestratePhoneScan(phone: string, options: OrchestratePhoneScanOptions = {}): Promise<PhoneDossier> {
-  const { onEvent = () => {} } = options;
+  const { onEvent = () => {}, session } = options;
   const startTime = Date.now();
-
+ 
   const dossier: PhoneDossier = {
     phone,
     validation: { valid: false, formatted: '', countryCode: 'VN', carrier: 'Unknown' },
@@ -40,7 +42,7 @@ export async function orchestratePhoneScan(phone: string, options: OrchestratePh
     socialSync: undefined,
     timeTakenMs: 0
   };
-
+ 
   // Step 1: Input Validation & Carrier Lookup (early gating)
   const validation = validatePhone(phone);
   dossier.validation = validation;
@@ -49,24 +51,24 @@ export async function orchestratePhoneScan(phone: string, options: OrchestratePh
     status: validation.valid ? 'VALID' : 'INVALID',
     data: validation
   });
-
+ 
   if (!validation.valid) {
     dossier.timeTakenMs = Date.now() - startTime;
     return dossier;
   }
-
+ 
   const cleanPhone = validation.formatted;
-
+ 
   // Helper utility to stagger simulated latency
   const stagger = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
+ 
   // Step 2: Parallel execution lanes with isolated error boundaries and staggered delays
   const [callerIdResult, peopleSearchResult, socialSyncResult] = await Promise.all([
     // Lane A: Reverse Caller ID Lookup (staggered delay ~400ms)
     (async (): Promise<callerIdModule.CallerIdResult> => {
       try {
         await stagger(400);
-        const result = await callerIdModule.lookupCallerID(cleanPhone);
+        const result = await callerIdModule.lookupCallerID(cleanPhone, { session });
         onEvent({
           module: 'caller_id',
           status: 'FOUND',

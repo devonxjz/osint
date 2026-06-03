@@ -78,9 +78,14 @@
 
       <!-- Interactive Inputs list -->
       <div style="display: flex; flex-direction: column; gap: 12px;">
-        {#each missingCredentialsPlatforms as plat}
-          <div style="display: grid; grid-template-columns: 140px 1fr 100px; align-items: center; gap: 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 8px 12px; border-radius: 8px;">
-            <span style="font-weight: 700; font-size: 13px; color: var(--text-primary);">{plat.name}</span>
+        {#each missingCredentialsPlatforms as plat (plat.name)}
+          <div style="display: grid; grid-template-columns: 240px 1fr 100px; align-items: center; gap: 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 8px 12px; border-radius: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-weight: 700; font-size: 13px; color: var(--text-primary);">{plat.name}</span>
+              <span class="status-badge" style="background: rgba(245, 158, 11, 0.08); color: var(--accent-orange); font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight: 700; border: 1px solid rgba(245, 158, 11, 0.2); white-space: nowrap;">
+                {scanner.language === 'vi' ? '⚠️ YÊU CẦU AUTH' : '⚠️ NEED AUTH'}
+              </span>
+            </div>
             
             <input 
               type="text" 
@@ -213,6 +218,11 @@
                 {/if}
                 {#if platform.riskLevel === 'HIGH'}
                   <span class="status-badge" style="background: rgba(239, 68, 68, 0.08); color: var(--accent-red); font-size: 9px; padding: 2px 5px;">⚠️ High Risk</span>
+                {/if}
+                {#if result?.data?.confidence === 'LOW'}
+                  <span class="status-badge" style="background: rgba(245, 158, 11, 0.08); color: var(--accent-orange, #f59e0b); font-size: 9px; padding: 2px 5px; border: 1px solid rgba(245, 158, 11, 0.2);" title={scanner.language === 'vi' ? 'Thu thập sử dụng cơ chế dự phòng do giới hạn môi trường' : 'Fallback crawler used due to sandbox limitations'}>
+                    ⚠️ {scanner.language === 'vi' ? 'Tin cậy thấp' : 'Low Confidence'}
+                  </span>
                 {/if}
               </div>
             </div>

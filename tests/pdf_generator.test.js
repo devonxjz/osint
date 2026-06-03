@@ -1,6 +1,22 @@
 'use strict';
 
 const { generateDossierPDF } = require('../dist-backend/email');
+const { HttpFactory } = require('../dist-backend/shared/http_factory');
+
+jest.mock('../dist-backend/shared/http_factory', () => ({
+  HttpFactory: {
+    fetchWithSession: jest.fn().mockImplementation(async (url) => {
+      if (url.includes('avatar') || url.includes('pravatar')) {
+        return {
+          status: 200,
+          headers: {},
+          body: Buffer.from('mock-avatar-bytes')
+        };
+      }
+      return { status: 404, headers: {}, body: '' };
+    })
+  }
+}));
 
 describe('PDF Dossier Generator', () => {
   const mockDossier = {

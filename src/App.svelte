@@ -11,6 +11,7 @@
   import EmailDossierPanel from './lib/EmailDossierPanel.svelte';
   import IdentityDossierPanel from './lib/IdentityDossierPanel.svelte';
   import DomainDossierPanel from './lib/DomainDossierPanel.svelte';
+  import ScannerDossierPanel from './lib/ScannerDossierPanel.svelte';
 
   const scanner = new ScannerState(typeof window !== 'undefined' ? window.location.origin : '');
 </script>
@@ -87,6 +88,8 @@
         <IdentityDossierPanel {scanner} />
       {:else if scanner.targetType === 'DOMAIN'}
         <DomainDossierPanel {scanner} />
+      {:else if scanner.targetType === 'SCANNER'}
+        <ScannerDossierPanel {scanner} />
       {:else}
         <CardGrid {scanner} />
       {/if}

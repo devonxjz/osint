@@ -1,5 +1,7 @@
 'use strict';
 
+jest.setTimeout(20000);
+
 const { lookupGravatar, computeGravatarHash } = require('../dist-backend/email/gravatar');
 
 describe('Gravatar & Avatar Intelligence', () => {

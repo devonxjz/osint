@@ -7,7 +7,7 @@ dotenv.config();
 
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import { analyzeInput, SSEStreamManager, ResultCache } from './shared';
+import { analyzeInput, SSEStreamManager, ResultCache, ScanSession } from './shared';
 import { orchestrateScan, getAllPlatforms, getPlatforms, getCategories } from './username';
 import { orchestrateEmailScan, generateDossierPDF } from './email';
 import { orchestratePhoneScan } from './phone';
@@ -72,6 +72,118 @@ app.get('/api/scan', async (req: Request, res: Response): Promise<void> => {
     }
   }
 
+  const analysis = analyzeInput(target);
+
+  // Raw Scanner Mode: Return browser-like JSON responses directly without Svelte/SSE
+  if (analysis.valid && analysis.type === 'SCANNER') {
+    const innerAnalysis = analyzeInput(analysis.sanitized);
+    if (!innerAnalysis.valid) {
+      res.status(400).json({ error: innerAnalysis.error });
+      return;
+    }
+
+    const abortController = new AbortController();
+    req.on('close', () => {
+      abortController.abort();
+    });
+
+    // Secure browser-mimicking headers
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+
+    try {
+      const session = new ScanSession();
+      if (innerAnalysis.type === 'EMAIL') {
+        const dossier = await orchestrateEmailScan(innerAnalysis.sanitized, {
+          onEvent: () => {},
+          hibpApiKey: process.env.HIBP_API_KEY || null,
+          session,
+        });
+        res.json({ type: 'EMAIL', target: innerAnalysis.sanitized, dossier });
+        return;
+      }
+
+      if (innerAnalysis.type === 'PHONE') {
+        const dossier = await orchestratePhoneScan(innerAnalysis.sanitized, {
+          onEvent: () => {},
+          session,
+        });
+        res.json({ type: 'PHONE', target: innerAnalysis.sanitized, dossier });
+        return;
+      }
+
+      if (innerAnalysis.type === 'REAL_NAME') {
+        const results: any[] = [];
+        const dossier = await scanIdentity(
+          innerAnalysis.sanitized,
+          {
+            deepScan: req.query.deep_scan === 'true',
+            cookies: cookieOverrides,
+            onResult: (resVal: any) => { results.push(resVal); },
+            onProgress: () => {},
+            session,
+          },
+          abortController.signal
+        );
+        res.json({ type: 'REAL_NAME', target: innerAnalysis.sanitized, dossier, results });
+        return;
+      }
+
+      if (innerAnalysis.type === 'DOMAIN') {
+        const results: any[] = [];
+        const dossier = await resolveDomainIntel(
+          innerAnalysis.sanitized,
+          {
+            onResult: (resVal: any) => { results.push(resVal); },
+            onProgress: () => {},
+            session,
+          },
+          abortController.signal
+        );
+        res.json({ type: 'DOMAIN', target: innerAnalysis.sanitized, dossier, results });
+        return;
+      }
+
+      // Default: USERNAME
+      const resolvedCats = categories ? categories.split(',').map(c => c.trim()) : [];
+      const platforms = getPlatforms(resolvedCats);
+      const results: any[] = [];
+      const summary = await orchestrateScan(
+        innerAnalysis.sanitized,
+        platforms as any,
+        {
+          onResult: (resVal: any) => { results.push(resVal); },
+          onProgress: () => {},
+          onError: (platformName: string, errMsg: string) => {
+            results.push({
+              platform: platformName,
+              status: 'NOT_FOUND',
+              url: '',
+              error: errMsg
+            });
+          }
+        },
+        {
+          maxConcurrency: 20,
+          highRiskConcurrency: 3,
+          cache: scanCache,
+          signal: abortController.signal,
+          cookies: cookieOverrides,
+          session
+        }
+      );
+      res.json({ type: 'USERNAME', target: innerAnalysis.sanitized, summary, results });
+      return;
+
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+  }
+
   const sse = new SSEStreamManager(res);
   sse.init();
 
@@ -84,12 +196,13 @@ app.get('/api/scan', async (req: Request, res: Response): Promise<void> => {
   });
 
   // 2. Validate and sanitize raw query target parameter
-  const analysis = analyzeInput(target);
   if (!analysis.valid) {
-    sse.send('error', { message: analysis.error || 'Invalid target format' });
+    sse.send('error', { message: (analysis as any).error || 'Invalid target format' });
     sse.end();
     return;
   }
+
+  const session = new ScanSession();
 
   // ─── Unified Routing Map ───
 
@@ -103,6 +216,7 @@ app.get('/api/scan', async (req: Request, res: Response): Promise<void> => {
           }
         },
         hibpApiKey: process.env.HIBP_API_KEY || null,
+        session,
       });
 
       if (!abortController.signal.aborted) {
@@ -126,7 +240,8 @@ app.get('/api/scan', async (req: Request, res: Response): Promise<void> => {
           if (!abortController.signal.aborted) {
             sse.send('result', event);
           }
-        }
+        },
+        session,
       });
 
       if (!abortController.signal.aborted) {
@@ -159,7 +274,13 @@ app.get('/api/scan', async (req: Request, res: Response): Promise<void> => {
             if (!abortController.signal.aborted) {
               sse.send('progress', progress);
             }
-          }
+          },
+          onVerified: (verified: any[]) => {
+            if (!abortController.signal.aborted) {
+              sse.send('verified', verified);
+            }
+          },
+          session,
         },
         abortController.signal
       );
@@ -192,7 +313,8 @@ app.get('/api/scan', async (req: Request, res: Response): Promise<void> => {
             if (!abortController.signal.aborted) {
               sse.send('progress', progress);
             }
-          }
+          },
+          session,
         },
         abortController.signal
       );
@@ -249,7 +371,9 @@ app.get('/api/scan', async (req: Request, res: Response): Promise<void> => {
         maxConcurrency: 20,
         highRiskConcurrency: 3,
         cache: scanCache,
-        signal: abortController.signal
+        signal: abortController.signal,
+        cookies: cookieOverrides,
+        session
       }
     );
 
@@ -287,6 +411,7 @@ app.get('/api/scan-email', async (req: Request, res: Response): Promise<void> =>
   }
 
   try {
+    const session = new ScanSession();
     const dossier = await orchestrateEmailScan(target.trim(), {
       onEvent: (event: any) => {
         if (!abortController.signal.aborted) {
@@ -294,6 +419,7 @@ app.get('/api/scan-email', async (req: Request, res: Response): Promise<void> =>
         }
       },
       hibpApiKey: process.env.HIBP_API_KEY || null,
+      session,
     });
 
     if (!abortController.signal.aborted) {
@@ -330,12 +456,14 @@ app.get('/api/scan-phone', async (req: Request, res: Response): Promise<void> =>
   }
 
   try {
+    const session = new ScanSession();
     const dossier = await orchestratePhoneScan(target.trim(), {
       onEvent: (event: any) => {
         if (!abortController.signal.aborted) {
           sse.send('result', event);
         }
-      }
+      },
+      session,
     });
 
     if (!abortController.signal.aborted) {

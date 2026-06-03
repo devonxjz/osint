@@ -1,7 +1,7 @@
 // backend/shared/index.ts
 'use strict';
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SSEStreamManager = exports.ResultCache = exports.ERRORS = exports.analyzeInput = void 0;
+exports.GLOBAL_HTML_BLACKLIST = exports.isSoft404 = exports.playwrightStealthClient = exports.proxyClient = exports.HttpFactory = exports.ScanSession = exports.isServerless = exports.SSEStreamManager = exports.ResultCache = exports.ERRORS = exports.analyzeInput = void 0;
 var analyzer_1 = require("./analyzer");
 Object.defineProperty(exports, "analyzeInput", { enumerable: true, get: function () { return analyzer_1.analyzeInput; } });
 Object.defineProperty(exports, "ERRORS", { enumerable: true, get: function () { return analyzer_1.ERRORS; } });
@@ -9,3 +9,16 @@ var cache_1 = require("./cache");
 Object.defineProperty(exports, "ResultCache", { enumerable: true, get: function () { return cache_1.ResultCache; } });
 var sseManager_1 = require("./sseManager");
 Object.defineProperty(exports, "SSEStreamManager", { enumerable: true, get: function () { return sseManager_1.SSEStreamManager; } });
+var runtime_1 = require("./runtime");
+Object.defineProperty(exports, "isServerless", { enumerable: true, get: function () { return runtime_1.isServerless; } });
+var session_state_1 = require("./session_state");
+Object.defineProperty(exports, "ScanSession", { enumerable: true, get: function () { return session_state_1.ScanSession; } });
+var http_factory_1 = require("./http_factory");
+Object.defineProperty(exports, "HttpFactory", { enumerable: true, get: function () { return http_factory_1.HttpFactory; } });
+var proxy_client_1 = require("./proxy_client");
+Object.defineProperty(exports, "proxyClient", { enumerable: true, get: function () { return proxy_client_1.proxyClient; } });
+var playwright_client_1 = require("./playwright_client");
+Object.defineProperty(exports, "playwrightStealthClient", { enumerable: true, get: function () { return playwright_client_1.playwrightStealthClient; } });
+var blacklist_1 = require("./blacklist");
+Object.defineProperty(exports, "isSoft404", { enumerable: true, get: function () { return blacklist_1.isSoft404; } });
+Object.defineProperty(exports, "GLOBAL_HTML_BLACKLIST", { enumerable: true, get: function () { return blacklist_1.GLOBAL_HTML_BLACKLIST; } });

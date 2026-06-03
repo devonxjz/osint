@@ -85,6 +85,7 @@ export class ApiEngine implements BaseEngine {
             url: targetUrl,
             responseTimeMs,
             bio: data.bio || null,
+            displayName: data.name || null,
             avatar: data.avatar_url || null,
             location: data.location || null
           };
@@ -104,6 +105,7 @@ export class ApiEngine implements BaseEngine {
             url: targetUrl,
             responseTimeMs,
             bio: redditUser.subreddit ? redditUser.subreddit.public_description : null,
+            displayName: redditUser.subreddit ? redditUser.subreddit.title : null,
             avatar: redditUser.snoovatar_img || redditUser.icon_img || null,
             location: null
           };
@@ -121,6 +123,7 @@ export class ApiEngine implements BaseEngine {
             url: targetUrl,
             responseTimeMs,
             bio: data.title || null,
+            displayName: data.name || data.username || null,
             avatar: data.avatar || null,
             location: data.location || null
           };
@@ -139,6 +142,7 @@ export class ApiEngine implements BaseEngine {
             url: targetUrl,
             responseTimeMs,
             bio: data.about || null,
+            displayName: null,
             avatar: null,
             location: null
           };
@@ -156,6 +160,7 @@ export class ApiEngine implements BaseEngine {
             url: targetUrl,
             responseTimeMs,
             bio: data.fullname || null,
+            displayName: data.fullname || null,
             avatar: null,
             location: null
           };
@@ -174,6 +179,7 @@ export class ApiEngine implements BaseEngine {
           url: targetUrl,
           responseTimeMs,
           bio: null,
+          displayName: null,
           avatar: null,
           location: null
         };

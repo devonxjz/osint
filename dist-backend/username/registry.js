@@ -15,7 +15,6 @@ const PLATFORMS = [
     { name: 'LeetCode', category: 'Tech', url: 'https://leetcode.com/{}', checkType: 'text', checkValue: 'user not found' },
     { name: 'CodePen', category: 'Tech', url: 'https://codepen.io/{}', checkType: 'status', checkValue: 404 },
     { name: 'HackerNews', category: 'Tech', url: 'https://news.ycombinator.com/user?id={}', checkType: 'api', checkValue: 'null', apiEndpoint: 'https://hacker-news.firebaseio.com/v0/user/{}.json' },
-    { name: 'Replit', category: 'Tech', url: 'https://replit.com/@{}', checkType: 'status', checkValue: 404 },
     { name: 'Dev.to', category: 'Tech', url: 'https://dev.to/{}', checkType: 'status', checkValue: 404 },
     { name: 'Hashnode', category: 'Tech', url: 'https://hashnode.com/@{}', checkType: 'status', checkValue: 404 },
     { name: 'ProductHunt', category: 'Tech', url: 'https://www.producthunt.com/@{}', checkType: 'status', checkValue: 404 },

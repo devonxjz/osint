@@ -48,7 +48,7 @@ const socialSyncModule = __importStar(require("./social_sync"));
  * @returns Consolidated telephone intelligence dossier
  */
 async function orchestratePhoneScan(phone, options = {}) {
-    const { onEvent = () => { } } = options;
+    const { onEvent = () => { }, session } = options;
     const startTime = Date.now();
     const dossier = {
         phone,
@@ -79,7 +79,7 @@ async function orchestratePhoneScan(phone, options = {}) {
         (async () => {
             try {
                 await stagger(400);
-                const result = await callerIdModule.lookupCallerID(cleanPhone);
+                const result = await callerIdModule.lookupCallerID(cleanPhone, { session });
                 onEvent({
                     module: 'caller_id',
                     status: 'FOUND',

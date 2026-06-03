@@ -1,5 +1,4 @@
 const app = require('../dist-backend/index').default;
-const axios = require('axios');
 
 // Mock scanner to avoid live outbound API calls in routing tests
 jest.mock('../dist-backend/username/scanner', () => ({
@@ -41,18 +40,17 @@ describe('SSE API Routing', () => {
 
   it('should respond with SSE headers and bad request error for short username', async () => {
     try {
-      const response = await axios.get(`${baseUrl}/api/scan?target=j&categories=Tech`, {
-        responseType: 'text'
-      });
+      const response = await fetch(`${baseUrl}/api/scan?target=j&categories=Tech`);
 
       // Assert correct SSE headers
-      expect(response.headers['content-type']).toContain('text/event-stream');
-      expect(response.headers['cache-control']).toContain('no-cache');
-      expect(response.headers['connection']).toContain('keep-alive');
+      expect(response.headers.get('content-type')).toContain('text/event-stream');
+      expect(response.headers.get('cache-control')).toContain('no-cache');
+      expect(response.headers.get('connection')).toContain('keep-alive');
 
+      const text = await response.text();
       // Assert error structure is streamed in SSE format
-      expect(response.data).toContain('event: error');
-      expect(response.data).toContain('Username too short');
+      expect(text).toContain('event: error');
+      expect(text).toContain('Username too short');
     } catch (err) {
       // Should not throw since it returns 200 with SSE stream even on logical error
       fail(err);
@@ -61,40 +59,41 @@ describe('SSE API Routing', () => {
 
   it('should stream progress, results, and end summary for a valid target query', async () => {
     // To keep it fast, we filter to a small subset or unknown categories
-    const response = await axios.get(`${baseUrl}/api/scan?target=johndoe&categories=UnknownCategory`, {
-      responseType: 'text'
-    });
+    const response = await fetch(`${baseUrl}/api/scan?target=johndoe&categories=UnknownCategory`);
 
     // Should return 200 and SSE content type
     expect(response.status).toBe(200);
-    expect(response.headers['content-type']).toContain('text/event-stream');
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
 
+    const text = await response.text();
     // Should return no target platforms matched the selected categories message
-    expect(response.data).toContain('event: error');
-    expect(response.data).toContain('No target platforms matched the selected categories.');
+    expect(text).toContain('event: error');
+    expect(text).toContain('No target platforms matched the selected categories.');
   });
 
   it('should return the full list of platforms dynamically via /api/platforms', async () => {
-    const response = await axios.get(`${baseUrl}/api/platforms`);
+    const response = await fetch(`${baseUrl}/api/platforms`);
     expect(response.status).toBe(200);
-    expect(Array.isArray(response.data)).toBe(true);
-    expect(response.data.length).toBeGreaterThan(85);
+    const data = await response.json();
+    expect(Array.isArray(data)).toBe(true);
+    expect(data.length).toBeGreaterThan(85);
 
-    const github = response.data.find(p => p.name === 'GitHub');
+    const github = data.find(p => p.name === 'GitHub');
     expect(github).toBeDefined();
     expect(github.category).toBe('Tech');
 
-    const facebook = response.data.find(p => p.name === 'Facebook');
+    const facebook = data.find(p => p.name === 'Facebook');
     expect(facebook).toBeDefined();
     expect(facebook.requiresProxy).toBe(true);
     expect(facebook.envCookieKey).toBe('FACEBOOK_COOKIE_KEY');
   });
 
   it('should return unique categories list dynamically via /api/categories', async () => {
-    const response = await axios.get(`${baseUrl}/api/categories`);
+    const response = await fetch(`${baseUrl}/api/categories`);
     expect(response.status).toBe(200);
-    expect(Array.isArray(response.data)).toBe(true);
-    expect(response.data.sort()).toEqual([
+    const data = await response.json();
+    expect(Array.isArray(data)).toBe(true);
+    expect(data.sort()).toEqual([
       'DarkWeb',
       'Gaming',
       'Media',
@@ -109,30 +108,41 @@ describe('SSE API Routing', () => {
     process.env.FACEBOOK_COOKIE_KEY = 'li_at=session123';
     delete process.env.LINKEDIN_COOKIE_KEY;
 
-    const response = await axios.get(`${baseUrl}/api/session-status`);
+    const response = await fetch(`${baseUrl}/api/session-status`);
     expect(response.status).toBe(200);
-    expect(response.data).toHaveProperty('FACEBOOK_COOKIE_KEY', true);
-    expect(response.data).toHaveProperty('LINKEDIN_COOKIE_KEY', false);
+    const data = await response.json();
+    expect(data).toHaveProperty('FACEBOOK_COOKIE_KEY', true);
+    expect(data).toHaveProperty('LINKEDIN_COOKIE_KEY', false);
   });
 
   it('should route a REAL_NAME query through the unified scan endpoint and stream progress/results', async () => {
-    const response = await axios.get(`${baseUrl}/api/scan?target=John+Doe`, {
-      responseType: 'text'
-    });
+    const response = await fetch(`${baseUrl}/api/scan?target=John+Doe`);
 
     expect(response.status).toBe(200);
-    expect(response.headers['content-type']).toContain('text/event-stream');
-    expect(response.data).toContain('event: progress');
-    expect(response.data).toContain('event: end');
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    const text = await response.text();
+    expect(text).toContain('event: progress');
+    expect(text).toContain('event: end');
   });
 
   it('should route a DOMAIN query through the unified scan endpoint and stream progress/results', async () => {
-    const response = await axios.get(`${baseUrl}/api/scan?target=google.com`, {
-      responseType: 'text'
-    });
+    const response = await fetch(`${baseUrl}/api/scan?target=google.com`);
 
     expect(response.status).toBe(200);
-    expect(response.headers['content-type']).toContain('text/event-stream');
-    expect(response.data).toContain('event: end');
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    const text = await response.text();
+    expect(text).toContain('event: end');
+  });
+
+  it('should route a SCANNER query through the scan endpoint and return raw JSON directly with secure headers', async () => {
+    const response = await fetch(`${baseUrl}/api/scan?target=scanner:google.com`);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('application/json');
+    expect(response.headers.get('cache-control')).toContain('no-store');
+    const data = await response.json();
+    expect(data).toHaveProperty('type', 'DOMAIN');
+    expect(data).toHaveProperty('target', 'google.com');
+    expect(data).toHaveProperty('dossier');
   });
 });

@@ -19,3 +19,4 @@ __exportStar(require("./base"), exports);
 __exportStar(require("./apiEngine"), exports);
 __exportStar(require("./htmlEngine"), exports);
 __exportStar(require("./browserEngine"), exports);
+__exportStar(require("./impersonateEngine"), exports);

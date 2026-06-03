@@ -88,7 +88,7 @@
       {#if foundProfiles.length > 0}
         <div class="profiles-grid">
           {#each foundProfiles as profile}
-            <div class="profile-card">
+            <div class="profile-card {profile.confidence?.toLowerCase() || ''}">
               <div class="profile-card-header">
                 <div class="profile-avatar-wrapper">
                   {#if profile.avatar}
@@ -100,7 +100,14 @@
                   {/if}
                 </div>
                 <div class="profile-platform-info">
-                  <span class="profile-platform-name">{profile.platform}</span>
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span class="profile-platform-name">{profile.platform}</span>
+                    {#if profile.score !== undefined}
+                      <span class="profile-score-badge {profile.confidence.toLowerCase()}">
+                        {profile.confidence} ({profile.score} pts)
+                      </span>
+                    {/if}
+                  </div>
                   <span class="profile-platform-variant">@{profile.variant}</span>
                 </div>
                 <a
@@ -114,7 +121,7 @@
                 </a>
               </div>
 
-              {#if profile.bio || profile.location}
+              {#if profile.bio || profile.location || profile.confidence === 'LOW'}
                 <div class="profile-card-body">
                   {#if profile.bio}
                     <p class="profile-bio-text">"{profile.bio}"</p>
@@ -122,6 +129,11 @@
                   {#if profile.location}
                     <div class="profile-location">
                       📍 {profile.location}
+                    </div>
+                  {/if}
+                  {#if profile.confidence === 'LOW'}
+                    <div class="collision-warning">
+                      ⚠️ {scanner.language === 'vi' ? 'Khớp Username - Chưa xác thực được danh tính' : 'Potential Username Collision (No confirmation)'}
                     </div>
                   {/if}
                 </div>
@@ -494,5 +506,61 @@
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+
+  .profile-card.low {
+    border-style: dashed;
+    border-color: rgba(239, 68, 68, 0.25);
+    background: rgba(239, 68, 68, 0.01);
+  }
+
+  .profile-card.low:hover {
+    border-color: rgba(239, 68, 68, 0.4);
+  }
+
+  .profile-card.low .profile-avatar-img {
+    filter: grayscale(100%) opacity(60%);
+  }
+
+  .profile-card.low .profile-avatar-placeholder {
+    background: linear-gradient(135deg, #475569 0%, #334155 100%);
+  }
+
+  .profile-score-badge {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+  }
+
+  .profile-score-badge.high {
+    background: rgba(16, 185, 129, 0.08);
+    color: var(--accent-green);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+
+  .profile-score-badge.medium {
+    background: rgba(99, 102, 241, 0.08);
+    color: var(--accent-blue);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+  }
+
+  .profile-score-badge.low {
+    background: rgba(239, 68, 68, 0.08);
+    color: var(--accent-red);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+  }
+
+  .collision-warning {
+    font-size: 11px;
+    color: var(--accent-red);
+    background: rgba(239, 68, 68, 0.05);
+    border: 1px solid rgba(239, 68, 68, 0.15);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-weight: 600;
+    margin-top: 4px;
   }
 </style>

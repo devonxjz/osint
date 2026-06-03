@@ -5,7 +5,7 @@ exports.SSEStreamManager = void 0;
 const zod_1 = require("zod");
 // Outbound validation schema for SSE payloads to protect client EventSource
 const ssePayloadSchema = zod_1.z.object({
-    event: zod_1.z.enum(['progress', 'result', 'end', 'error']),
+    event: zod_1.z.enum(['progress', 'result', 'end', 'error', 'verified']),
     data: zod_1.z.any()
 });
 class SSEStreamManager {

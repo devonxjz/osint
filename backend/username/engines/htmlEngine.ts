@@ -23,28 +23,33 @@ export function getRandomUserAgent(): string {
 
 interface PlatformMetadata {
   bio: string | null;
+  displayName: string | null;
   avatar: string | null;
   location: string | null;
 }
 
 export function extractMetadata(html: string, platformName: string): PlatformMetadata {
   const $ = cheerio.load(html);
-  const metadata: PlatformMetadata = { bio: null, avatar: null, location: null };
+  const metadata: PlatformMetadata = { bio: null, displayName: null, avatar: null, location: null };
 
   try {
     if (platformName === 'GitHub') {
       metadata.avatar = $('meta[property="og:image"]').attr('content') || null;
       metadata.bio = $('.p-note div').text().trim() || $('meta[property="og:description"]').attr('content') || null;
+      metadata.displayName = $('.p-name').text().trim() || $('meta[property="og:title"]').attr('content')?.split(' · ')[0] || null;
       metadata.location = $('span[itemprop="homeLocation"]').text().trim() || null;
     } else if (platformName === 'GitLab') {
       metadata.avatar = $('.avatar-jpg').attr('src') || null;
       metadata.bio = $('.user-profile-bio').text().trim() || null;
+      metadata.displayName = $('.user-profile-name').text().trim() || null;
     } else if (platformName === 'Medium') {
       metadata.avatar = $('meta[property="og:image"]').attr('content') || null;
       metadata.bio = $('meta[name="description"]').attr('content') || null;
+      metadata.displayName = $('meta[property="og:title"]').attr('content')?.replace(' – Medium', '') || null;
     } else {
       metadata.avatar = $('meta[property="og:image"]').attr('content') || $('meta[name="twitter:image"]').attr('content') || null;
       metadata.bio = $('meta[property="og:description"]').attr('content') || $('meta[name="description"]').attr('content') || null;
+      metadata.displayName = $('meta[property="og:title"]').attr('content') || $('title').text().trim() || null;
     }
 
     if (metadata.avatar && metadata.avatar.startsWith('//')) {

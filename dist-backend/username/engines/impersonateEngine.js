@@ -5,6 +5,7 @@ exports.impersonateEngine = exports.ImpersonateEngine = void 0;
 const child_process_1 = require("child_process");
 const util_1 = require("util");
 const htmlEngine_1 = require("./htmlEngine");
+const blacklist_1 = require("../../shared/blacklist");
 const execAsync = (0, util_1.promisify)(child_process_1.exec);
 class ImpersonateEngine {
     async scan(username, platform, options = {}) {
@@ -44,28 +45,8 @@ class ImpersonateEngine {
             const responseTimeMs = Date.now() - startTime;
             const html = stdout;
             if (typeof html === 'string') {
-                const lowerHtml = html.toLowerCase();
-                // Match logic checks
-                const GLOBAL_HTML_BLACKLIST = [
-                    'page not found',
-                    'profile not found',
-                    'user not found',
-                    'cannot be found',
-                    'could not be found',
-                    "we can't find that page",
-                    "page no longer exists",
-                    'no such user',
-                    'user does not exist',
-                    "user doesn't exist",
-                    'account does not exist',
-                    "account doesn't exist",
-                    'profile does not exist',
-                    "profile doesn't exist"
-                ];
-                for (const phrase of GLOBAL_HTML_BLACKLIST) {
-                    if (lowerHtml.includes(phrase)) {
-                        return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
-                    }
+                if ((0, blacklist_1.isSoft404)(html, username, undefined)) {
+                    return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
                 }
                 if (platform.checkType === 'text' && html.includes(platform.checkValue)) {
                     return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };

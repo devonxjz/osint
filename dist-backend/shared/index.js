@@ -1,7 +1,7 @@
 // backend/shared/index.ts
 'use strict';
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.playwrightStealthClient = exports.proxyClient = exports.HttpFactory = exports.ScanSession = exports.isServerless = exports.SSEStreamManager = exports.ResultCache = exports.ERRORS = exports.analyzeInput = void 0;
+exports.GLOBAL_HTML_BLACKLIST = exports.isSoft404 = exports.playwrightStealthClient = exports.proxyClient = exports.HttpFactory = exports.ScanSession = exports.isServerless = exports.SSEStreamManager = exports.ResultCache = exports.ERRORS = exports.analyzeInput = void 0;
 var analyzer_1 = require("./analyzer");
 Object.defineProperty(exports, "analyzeInput", { enumerable: true, get: function () { return analyzer_1.analyzeInput; } });
 Object.defineProperty(exports, "ERRORS", { enumerable: true, get: function () { return analyzer_1.ERRORS; } });
@@ -19,3 +19,6 @@ var proxy_client_1 = require("./proxy_client");
 Object.defineProperty(exports, "proxyClient", { enumerable: true, get: function () { return proxy_client_1.proxyClient; } });
 var playwright_client_1 = require("./playwright_client");
 Object.defineProperty(exports, "playwrightStealthClient", { enumerable: true, get: function () { return playwright_client_1.playwrightStealthClient; } });
+var blacklist_1 = require("./blacklist");
+Object.defineProperty(exports, "isSoft404", { enumerable: true, get: function () { return blacklist_1.isSoft404; } });
+Object.defineProperty(exports, "GLOBAL_HTML_BLACKLIST", { enumerable: true, get: function () { return blacklist_1.GLOBAL_HTML_BLACKLIST; } });

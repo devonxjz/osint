@@ -7,6 +7,7 @@ import { BaseEngine, EngineScanOptions } from './base';
 import { PlatformConfig } from '../registry';
 import { ScanResult } from '../scanner';
 import { htmlEngine, getRandomUserAgent, extractMetadata } from './htmlEngine';
+import { isSoft404 } from '../../shared/blacklist';
 
 export class BrowserEngine implements BaseEngine {
   async scan(
@@ -147,40 +148,18 @@ export class BrowserEngine implements BaseEngine {
       const html = await page.content();
       const responseTimeMs = Date.now() - startTime;
 
+      let parsedMetadata = { bio: null, displayName: null, avatar: null, location: null };
+
       if (typeof html === 'string') {
-        const lowerHtml = html.toLowerCase();
-        
-        // 1. Check for standard error pages or global blacklist phrases
-        const GLOBAL_HTML_BLACKLIST = [
-          'page not found',
-          'profile not found',
-          'user not found',
-          'cannot be found',
-          'could not be found',
-          "we can't find that page",
-          "page no longer exists",
-          'no such user',
-          'user does not exist',
-          "user doesn't exist",
-          'account does not exist',
-          "account doesn't exist",
-          'profile does not exist',
-          "profile doesn't exist",
-          'sorry, that page does not exist',
-          "page you're looking for could not be found"
-        ];
-
         const metadata = extractMetadata(html, platform.name);
-        const bio = (metadata.bio || '').toLowerCase();
-        const lowerUsername = (username || '').toLowerCase();
-
-        for (const phrase of GLOBAL_HTML_BLACKLIST) {
-          if (lowerHtml.includes(phrase)) {
-            if (bio.includes(phrase) || lowerUsername.includes(phrase)) {
-              continue;
-            }
-            return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
-          }
+        parsedMetadata = {
+          bio: metadata.bio as any,
+          displayName: metadata.displayName as any,
+          avatar: metadata.avatar as any,
+          location: metadata.location as any
+        };
+        if (isSoft404(html, username, parsedMetadata.bio)) {
+          return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
         }
 
         // 2. Platform match rules checkType
@@ -197,13 +176,12 @@ export class BrowserEngine implements BaseEngine {
       }
 
       // If passed all not-found checks, target profile exists!
-      const metadata = extractMetadata(html, platform.name);
       return {
         platform: platform.name,
         status: 'FOUND',
         url: targetUrl,
         responseTimeMs,
-        ...metadata
+        ...parsedMetadata
       };
 
     } catch (error: any) {

@@ -7,6 +7,7 @@ import { BaseEngine, EngineScanOptions } from './base';
 import { PlatformConfig } from '../registry';
 import { ScanResult } from '../scanner';
 import { htmlEngine } from './htmlEngine';
+import { isSoft404 } from '../../shared/blacklist';
 
 const execAsync = promisify(exec);
 
@@ -60,30 +61,8 @@ export class ImpersonateEngine implements BaseEngine {
       const html = stdout;
 
       if (typeof html === 'string') {
-        const lowerHtml = html.toLowerCase();
-        
-        // Match logic checks
-        const GLOBAL_HTML_BLACKLIST = [
-          'page not found',
-          'profile not found',
-          'user not found',
-          'cannot be found',
-          'could not be found',
-          "we can't find that page",
-          "page no longer exists",
-          'no such user',
-          'user does not exist',
-          "user doesn't exist",
-          'account does not exist',
-          "account doesn't exist",
-          'profile does not exist',
-          "profile doesn't exist"
-        ];
-
-        for (const phrase of GLOBAL_HTML_BLACKLIST) {
-          if (lowerHtml.includes(phrase)) {
-            return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
-          }
+        if (isSoft404(html, username, undefined)) {
+          return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
         }
 
         if (platform.checkType === 'text' && html.includes(platform.checkValue)) {

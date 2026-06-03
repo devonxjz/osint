@@ -8,6 +8,7 @@ import { BaseEngine, EngineScanOptions } from './base';
 import { PlatformConfig } from '../registry';
 import { ScanResult } from '../scanner';
 import { EvasionClient } from './evasionClient';
+import { isSoft404 } from '../../shared/blacklist';
 
 const evasionClient = new EvasionClient();
 
@@ -162,47 +163,18 @@ export class HtmlEngine implements BaseEngine {
 
       const html = response.body;
 
+      let parsedMetadata = { bio: null, displayName: null, avatar: null, location: null };
+
       if (typeof html === 'string') {
-        const lowerHtml = html.toLowerCase();
-        const GLOBAL_HTML_BLACKLIST = [
-          'page not found',
-          'profile not found',
-          'user not found',
-          'cannot be found',
-          'could not be found',
-          "we can't find that page",
-          "page no longer exists",
-          'no such user',
-          'user does not exist',
-          "user doesn't exist",
-          'account does not exist',
-          "account doesn't exist",
-          'profile does not exist',
-          "profile doesn't exist",
-          'we have shut down stack overflow jobs',
-          'story has been shut down',
-          'story has been sunset',
-          'không phải cứ biến mất là mất tích',
-          'trang này thì mất tích thật rồi',
-          'liên kết không hoạt động hoặc trang này không còn nữa',
-          'sorry, that page does not exist',
-          "page you're looking for could not be found",
-          'there was an error on the server',
-          'the server returned this error',
-          'error! there was an error on the server'
-        ];
-
         const metadata = extractMetadata(html, platform.name);
-        const bio = (metadata.bio || '').toLowerCase();
-        const lowerUsername = (username || '').toLowerCase();
-
-        for (const phrase of GLOBAL_HTML_BLACKLIST) {
-          if (lowerHtml.includes(phrase)) {
-            if (bio.includes(phrase) || lowerUsername.includes(phrase)) {
-              continue;
-            }
-            return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
-          }
+        parsedMetadata = {
+          bio: metadata.bio as any,
+          displayName: metadata.displayName as any,
+          avatar: metadata.avatar as any,
+          location: metadata.location as any
+        };
+        if (isSoft404(html, username, parsedMetadata.bio)) {
+          return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
         }
       }
 
@@ -231,13 +203,12 @@ export class HtmlEngine implements BaseEngine {
         return { platform: platform.name, status: 'NOT_FOUND', url: targetUrl, responseTimeMs };
       }
 
-      const metadata = typeof html === 'string' ? extractMetadata(html, platform.name) : { bio: null, avatar: null, location: null };
       return {
         platform: platform.name,
         status: 'FOUND',
         url: targetUrl,
         responseTimeMs,
-        ...metadata
+        ...parsedMetadata
       };
 
     } catch (error: any) {

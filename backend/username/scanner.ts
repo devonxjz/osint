@@ -18,6 +18,7 @@ export interface ScanResult {
   error?: string;
   responseTimeMs?: number;
   bio?: string | null;
+  displayName?: string | null;
   avatar?: string | null;
   location?: string | null;
   confidence?: 'HIGH' | 'LOW';

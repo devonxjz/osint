@@ -275,6 +275,11 @@ app.get('/api/scan', async (req: Request, res: Response): Promise<void> => {
               sse.send('progress', progress);
             }
           },
+          onVerified: (verified: any[]) => {
+            if (!abortController.signal.aborted) {
+              sse.send('verified', verified);
+            }
+          },
           session,
         },
         abortController.signal

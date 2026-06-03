@@ -766,6 +766,22 @@ export class ScannerState {
         this.logs.push(`${status}: ${parsed.platform} (${parsed.variant}) -> ${parsed.url}`);
       });
       
+      this.eventSource.addEventListener('verified', (e: MessageEvent) => {
+        const parsed = JSON.parse(e.data);
+        let highest = 'LOW';
+        for (const p of parsed) {
+          if (p.confidence === 'HIGH') {
+            highest = 'HIGH';
+          } else if (p.confidence === 'MEDIUM' && highest !== 'HIGH') {
+            highest = 'MEDIUM';
+          }
+        }
+        this.identityDossier = {
+          found: parsed,
+          confidence: highest
+        };
+      });
+      
       this.eventSource.addEventListener('end', (e: MessageEvent) => {
         const parsed = JSON.parse(e.data);
         this.identityDossier = parsed.dossier;
